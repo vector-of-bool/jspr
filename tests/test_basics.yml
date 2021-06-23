@@ -1,0 +1,526 @@
+cases:
+  apply-1:
+    what: Check that 'apply' works
+    code:
+      - func=: .add
+      - args=`: [1, [add: 4, and: 9]]
+      - -assert:
+          - eq: [apply: .func, with: .args]
+          - and: 14
+    expect: null
+
+  apply-2:
+    what: Check 'apply' with a non-callable object
+    code:
+      - func=: 88
+      - args=': [1, 2]
+      - [apply: .func, with: .args]
+    rescue: [invalid-apply-func, 88, [1, 2]]
+
+  # apply-3:
+  #   what: Check 'apply' with a non-array arglist
+  #   code:
+  #     - func=: .add
+  #     - args=: 552
+  #     - [apply: .func, with: .args]
+  #   rescue: [invalid-apply-args, __something__, 552]
+
+  eval-1:
+    what: Evaluate a simple expression
+    code:
+      - res=: [eval': [add: 1, and: 4], with: [__env__]]
+      - .res
+    expect: 5
+
+  math-1:
+    what: Simple addition
+    code:
+      - [+, 2, 3]
+    expect: 5
+
+  math-2:
+    what: Nested arithmetic, and float division
+    code:
+      - [/, [+, 2, 3], 2]
+    expect: 2.5
+
+  math-3:
+    what: floordiv gives an integral result
+    code:
+      - [//, [+, 2, 3], 2]
+    expect: 2
+
+  math-4:
+    what: KeywordList math
+    code:
+      - [add: 4, and: 3]
+    expect: 7
+
+  cond-1:
+    what: Test 'cond' for branches
+    code:
+      - -cond:
+          - - [eq: 4, and: 6]
+            - 88
+          - - [eq: 8, and: 0]
+            - 10
+          - - true
+            - "Salad"
+    expect: "Salad"
+
+  cond-2:
+    what: Test 'cond' for evaluated conditions
+    code:
+      - foo=: 5
+      - -cond:
+          - - [eq: .foo, and: 1]
+            - One
+          - - [eq: .foo, and: 5]
+            - Five
+          - - [eq: .foo, and: 9]
+            - Nine
+    expect: Five
+
+  cond-3:
+    what: No matching conditions is an error
+    code:
+      - foo=: 9
+      - -cond:
+          - - [eq: .foo, and: 3]
+            - Three
+          - - [eq: .foo, and: 88]
+            - Eighty-eight
+    rescue: [cond-no-match]
+
+  cond-4:
+    what: cond creates a new scope
+    code:
+      - foo=: 3
+      - -cond:
+          - - [eq: [let, foo, 5], and: 8]
+            - Nope
+          - - [eq: .foo, and: 3]
+            - Three
+      - .foo
+    expect: 3
+
+  cond-5:
+    what: cond creates a new scope 2
+    code:
+      - foo=: 3
+      - -cond:
+          - - true
+            - [let, foo, 7]
+      - .foo
+    expect: 3
+
+  cond-6:
+    what: cond with a non-boolean branch value
+    code:
+      - foo=: 81
+      - -cond:
+          - - .foo
+            - 8
+    rescue: [invalid-cond-condition, 81]
+
+  cond-7:
+    what: cond condition scope is separate from body scope
+    code:
+      - foo=: 28
+      - -cond:
+          # Set 'foo' to 9,
+          - - -do:
+                - foo=: 9
+                - [eq, .foo, 28] # assignment shouuld propagate
+            - -raise: Fail1
+          - - [eq, .foo, 9] # .foo should no longer be 9
+            - -raise: Fail2
+          - - -do:
+                - foo=: 8 # Set .foo to 8
+                - [eq, .foo, 8]
+            # Within the body, .foo is no longer 8
+            - -assert: [eq, .foo, 28]
+      - .foo
+    expect: 28
+
+  if-1:
+    what: Simple if branch
+    code:
+      - foo=: 6
+      - - if: [eq, .foo, 5]
+        - then: It is five
+        - else: It is not five
+    expect: It is not five
+
+  if-2:
+    what: if branch with a non-bool condition
+    code:
+      - foo=: 991
+      - - if: .foo
+        - then: Nope
+        - else: Won't happen
+    rescue: ["invalid-if-condition", 991]
+
+  if-3:
+    what: if branch creates a new scope
+    code:
+      - foo=: 92
+      - - if: [eq: .foo, and: 92]
+        - then: [let, foo, 91]
+        - else: null
+      - .foo
+    expect: 92
+
+  if-4:
+    what: if branch cond scope is not shared
+    code:
+      - foo=: 92
+      - - if-: [[let, foo, 7], [eq, .foo, 7]]
+        - then: [assert, [eq, .foo, 92]]
+        - else: [raise, Nope]
+      - .foo
+    expect: 92
+
+  do-1:
+    code:
+      - [do, [5]]
+    expect: 5
+
+  do-2:
+    code:
+      - foo=: 8
+      - .foo
+    expect: 8
+
+  do-3:
+    code:
+      - [do, 8]
+    rescue: ["invalid-do", 8]
+
+  do-4:
+    code:
+      - [print: "Something", q-: 4]
+    rescue: ["invalid-do-quote", q-, 4]
+
+  let-1:
+    code:
+      - [let: b, be: 5]
+      - [let: c, be: 8]
+      - [add: .b, and: .c]
+    expect: 13
+
+  let-2:
+    # prettier-ignore
+    code:
+      - [{
+        "do": [
+          [{"let": "c"}, {"be": 33}],
+          [{"let": "d"}, {"be": 77}],
+          ["+", ".c", ".d"]
+        ]
+      }]
+    expect: 110
+
+  let-3:
+    code:
+      - [do, [[let, egg, 13], [add, .egg, 12]]]
+    expect: 25
+
+  let-4:
+    code:
+      - a=: 66
+      - .a
+    expect: 66
+
+  let-5:
+    code:
+      - [let, foo, 5]
+      - .foo
+    expect: 5
+
+  bad-name:
+    code: [.nonesuch]
+    rescue: ["env-name-error", "nonesuch"]
+
+  quote-1:
+    code:
+      - [quote: 3]
+    expect: 3
+
+  quote-2:
+    code:
+      - -map:
+          foo: [quote: 3]
+          bar: [quote: 6]
+    expect: { foo: 3, bar: 6 }
+
+  quote-3:
+    code:
+      - [quote: { foo: [quote: 3], bar: [add: 3, and: 65] }]
+    expect:
+      foo: [quote: 3]
+      bar: [add: 3, and: 65]
+
+  quote-4:
+    code:
+      - -map:
+          foo': [bar: baz]
+    expect:
+      foo: [bar: baz]
+
+  quote-5:
+    code:
+      - [let: a, be': { foo: bar }]
+      - .a
+    expect:
+      foo: bar
+
+  quote-6:
+    code:
+      - [let: a, be': { foo': baz }]
+      - .a
+    expect:
+      foo': baz
+
+  quote-7:
+    code:
+      - [let: a, be:: { foo': baz }]
+      - .a
+    expect:
+      foo: baz
+
+  quote-8:
+    code:
+      - [add': 3, and: 7]
+    expect: 10
+
+  quote-9:
+    code:
+      - [let': .value, be: 3]
+      - ..value
+    expect: 3
+
+  quote-10:
+    code:
+      - [let: foo, be: 33]
+      - [let: bar, be`: [bar, .foo]]
+      - .bar
+    expect: [bar, 33]
+
+  quote-11:
+    what: Map quotes receive their own scope
+    code:
+      - foo=: 3
+      - -id::
+          foo: [let, foo, 4]
+      - .foo
+    expect: 3
+
+  lambda-1:
+    code:
+      - [let: fun, be: [lambda: [a, b], is: [add: .a, and: .b]]]
+      - [fun, 6, 7]
+    expect: 13
+
+  lambda-2:
+    code:
+      - plus=: 6
+      - fun=: [lambda: [a, b], is: [add, .a, [add, .plus, .b]]]
+      - [fun, 6, 7]
+    expect: 19
+
+  lambda-3:
+    code:
+      - my-mult=: [lambda: [val, with], is: [mul: .val, by: .with]]
+      - [my-mult: 7, with: 3]
+    expect: 21
+
+  lambda-4:
+    expect: 72
+    code:
+      - fun=:
+          - lambda: [val]
+          - is:
+              - do:
+                  - square=: [mul, .val, .val]
+                  - [add, .square, .val]
+      - [fun, 8]
+
+  lambda-5:
+    code:
+      - some-var=: 8
+      - func=:
+          - lambda: [foo]
+          - is:
+              - do:
+                  - some-var=: 9
+                  - [add: .some-var, and: .foo]
+      - result=: [func, 1]
+      - [or: [eq: .result, and: 10], or: [raise`: ["failed", .result]]]
+      - .some-var
+    expect: 8
+
+  lambda-6:
+    code:
+      - func=:
+          - lambda: [a]
+          - is-:
+              - o=: 9
+              - [sub: .o, minus: .a]
+      - [apply: .func, with`: [1]]
+    expect: 8
+
+  or-1:
+    code:
+      - [or: false, or: [eq: 5, and: 8], or: [neq, 6, 1], or: [raise: Ouch]]
+    expect: true
+
+  or-2:
+    code:
+      - [or: false, or: [eq: 5, and: 8], or: [raise: Ouch]]
+    rescue: Ouch
+
+  or-3:
+    code:
+      - foo=: 4
+      - [or: false, or: .foo, or: [raise: Nope]]
+    rescue: [invalid-or-condition, 4]
+
+  macro-1:
+    code:
+      - m=: [macro: [], is: Something]
+      - [m]
+    expect: Something
+
+  macro-2:
+    code:
+      - [let: m, be: [macro: [a], is: [[ref: .a], 99, 74]]]
+      - [m, add]
+    expect: 173
+
+  macro-3:
+    code:
+      - m=: [macro: [], is': .value]
+      - value=: 92
+      - [m]
+    expect: 92
+
+  raise-1:
+    code:
+      - [raise: 4]
+    rescue: 4
+
+  join-1:
+    code:
+      - a=`: [1, 2, 3, 4]
+      - b=`: [3, 1, 7, 1]
+      - c=: [join: .a, with: .b]
+      - .c
+    expect: [1, 2, 3, 4, 3, 1, 7, 1]
+
+  join-2:
+    code:
+      - [join: I am a string, with`: [I, am, an, array]]
+    rescue: [invalid-join, I am a string, [I, am, an, array]]
+
+  assert-1:
+    code:
+      - [assert: true]
+      - [assert: [eq: 1, and: 1]]
+      - [assert: [neq: 4, and: "string"]]
+      - [assert: [eq: 4, and: 1]]
+    rescue: ["assertion-failed", [eq: 4, and: 1], [eq: 4, and: 1]]
+
+  assert-2:
+    code:
+      - [assert: true]
+      - foo=: 881
+      - [assert: [eq: 1, and: .foo]]
+    rescue: [assertion-failed, [eq: 1, and: .foo], [eq: 1, and: 881]]
+
+  assert-3:
+    code:
+      - [assert: true]
+      - foo=: 881
+      - [assert: [eq, 1, .foo]]
+    rescue: [assertion-failed, [eq, 1, .foo], [eq, 1, 881]]
+
+  eq-1:
+    code:
+      - [assert: [eq, 5, [add, 3, 2]]]
+    expect: null
+
+  div-1:
+    code:
+      - - assert:
+            - eq: [div: 3, by: 2]
+            - and: 1.5
+      - - assert:
+            - eq: [floordiv: 3, by: 2]
+            - and: 1
+    expect: null
+
+  len-1:
+    code:
+      - [len: "Hello"]
+    expect: 5
+
+  len-2:
+    code:
+      - [assert: [eq: 5, and: [len: "Hello"]]]
+      - [assert: [eq: 2, and: [len': [1, 2]]]]
+      - [assert: [eq: 3, and: [len:: { a: b, c: d, e: f }]]]
+      - [len': [1, 2, 3]]
+    expect: 3
+
+  len-3:
+    code:
+      - [len': { a: b, c: d, e: f }]
+    expect: 3
+
+  len-4:
+    code:
+      - [len: true]
+    rescue: [invalid-len, true]
+
+  elem-1:
+    code:
+      - arr=': [foo, bar, baz]
+      - [assert: [eq: bar, and: [elem: .arr, at: 1]]]
+      - [assert: [eq: baz, and: [elem: .arr, at: 2]]]
+      - [assert: [eq: baz, and: [elem: .arr, at: -1]]]
+      - [assert: [eq: foo, and: [elem: .arr, at: 0]]]
+    expect: null
+
+  elem-2:
+    code:
+      - arr=': [foo, bar, baz]
+      - [elem: .arr, at: 3]
+    expect: ["invalid-elem-index", [foo, bar, baz], 3]
+
+  slice-1:
+    code:
+      - arr=': [1, 2, 3, 4, 5, 6]
+      - - assert:
+            - eq': [1, 2, 3]
+            - and: [slice: .arr, to: 3]
+      - - assert:
+            - eq': [3, 4, 5, 6]
+            - and: [slice: .arr, from: 2]
+      - - assert:
+            - eq': [1, 2, 3]
+            - and: [slice: .arr, to: -3]
+      - - assert:
+            - eq': [3, 4, 5, 6]
+            - and: [slice: .arr, from: -4]
+      - - assert:
+            - eq': []
+            - and: [slice: .arr, from: -1, to: 5]
+    expect: null
+
+  slice-2:
+    code:
+      - arr=': [1, 2, 3]
+      - [slice: .arr, from: 2, to: 1]
+
+    rescue: [invalid-slice-range, [1, 2, 3], 2, 1]

@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "jspr"
+version = "0.1.0"
+description = ""
+authors = ["vector-of-bool <vectorofbool@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.4"
+PyYAML = "^5.4.1"
+pytest-xdist = "^2.2.1"
+mypy = "^0.902"
+pylint = "^2.8.3"
+yapf = "^0.31.0"
+rope = "^0.19.0"
+Sphinx = "^4.0.2"
+
+[tool.poetry.scripts]
+jspr = "jspr.main:start"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

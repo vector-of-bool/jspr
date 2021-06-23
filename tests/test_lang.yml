@@ -1,0 +1,284 @@
+cases:
+  string-1:
+    what: Resolve a variable in the environment
+    env:
+      foo: 3
+    code:
+      - .foo
+    expect: 3
+
+  string-2:
+    what: Non-variable syntax is just a string
+    code:
+      - foo
+    expect: foo
+
+  string-3:
+    what: Looking up a non-existent variable will raise
+    env:
+      bar: 31
+    code:
+      - .bar-bad
+    rescue: [env-name-error, bar-bad]
+
+  string-4:
+    what: Empty strings are just strings
+    code:
+      - ""
+    expect: ""
+
+  array-1:
+    what: Empty arrays are treated as empty arrays
+    code:
+      - []
+    expect: []
+
+  array-2:
+    what: Arrays are treated as call expressions
+    code:
+      - [id, 5]
+    expect: 5
+
+  array-3:
+    what: First array element is resolved as a callable
+    code:
+      - [[id, .id], String]
+    expect: String
+
+  array-4:
+    what: Quoted array literals are evaluated
+    code:
+      - [array, [1, 2, 3]]
+    expect: [1, 2, 3]
+
+  array-5:
+    what: Non-array arguments are invalid
+    code:
+      - [array, 5]
+    rescue: [invalid-array, 5]
+
+  array-6:
+    what: Strings are not arrays
+    code:
+      - [array, string]
+    rescue: [invalid-array, string]
+
+  array-7:
+    what: Variable references to an array is invalid. Must be an array expression.
+    env:
+      arr: [1, 2, 3]
+    code:
+      - [array, .arr]
+    rescue: [invalid-array, .arr]
+
+  array-8:
+    what: Subexpressions in arrays are evaluated
+    env:
+      foo: 7
+    code:
+      - [array, [1, 2, .foo, [id, 8]]]
+    expect: [1, 2, 7, 8]
+
+  array-9:
+    what: Arrays receive their own scope
+    code:
+      - foo=: 9
+      - [array, [1, 2, [let, foo, 3], 4]]
+      - .foo
+    expect: 9
+
+  array-10:
+    what: Argument evaluation gets its own scope
+    code:
+      - foo=: 30
+      - [id: [let, foo, 2]]
+      - .foo
+    expect: 30
+
+  kwlist-1:
+    what: Keyword syntax is evaluated
+    code:
+      - [id: Meow]
+    expect: Meow
+
+  kwlist-2:
+    what: All elements in a kwlist-call must be maps
+    code:
+      - [id: 6, null]
+    rescue: [invalid-kw-apply, [id: 6, null]]
+
+  kwlist-3:
+    what: Empty maps in a kwlist-call are okay
+    code:
+      - [id: 3, {}]
+    expect: 3
+
+  kwlist-4:
+    what: Keys with quotes quote their argument
+    code:
+      - [id': [foo, bar]]
+    expect: [foo, bar]
+
+  kwlist-5:
+    what: Keys with a backtick array-quote their argument
+    env:
+      foo: 8
+      bar: 9
+    code:
+      - [id`: [.foo, .bar]]
+    expect: [8, 9]
+
+  kwlist-6:
+    what: Keys with quotes do not evaluate their arguments
+    env:
+      foo: 1
+    code:
+      - [id': [.foo, .bar]]
+    expect: [.foo, .bar]
+
+  kwlist-7:
+    what: Keys with a hyphen evaluate each element of their argument
+    code:
+      - [id-: [foo, bar]]
+    expect: bar
+
+  kwlist-8:
+    what: Array-quotes require array expressions
+    code:
+      - [id`: 6]
+    rescue: [invalid-array-quote, id`, 6]
+
+  kwlist-9:
+    what: Seq-quotes require array expressions
+    code:
+      - [id-: 9]
+    rescue: [invalid-do-quote, id-, 9]
+
+  kwlist-10:
+    what: Array-quotes must be direct arrays
+    env:
+      foo: [1, 2, 3]
+    code:
+      - [id`: .foo]
+    rescue: [invalid-array-quote, id`, .foo]
+
+  kwlist-11:
+    what: Do-quotes require direct arrays
+    env:
+      foo: [1, 2, 3]
+    code:
+      - [id-: .foo]
+    rescue: [invalid-do-quote, id-, .foo]
+
+  do-1:
+    what: Empty 'do' is null
+    code: []
+    expect: null
+
+  do-2:
+    what: Auto-array a map with a leading hyphen
+    code:
+      - -id-:
+          - 1
+          - 2
+          - 3
+    expect: 3
+
+  do-3:
+    what: A bare map might look like a call, but it is not
+    code:
+      - id: 9
+    rescue: ["invalid-bare-map", id: 9]
+
+  do-4:
+    what: Invalid bare map quote
+    code:
+      - -id:: 8
+    rescue: [invalid-map-quote, "-id:", 8]
+
+  raise-1:
+    what: do will re-raise errors
+    code:
+      - [raise: "123"]
+    rescue: "123"
+
+  lang-1:
+    what: Evaluate an integer
+    code: [1]
+    expect: 1
+
+  lang-2:
+    what: Evaluate an integer pt 2
+    code: [4]
+    expect: 4
+
+  lang-3:
+    what: Evaluate a boolean
+    code: [true]
+    expect: true
+
+  lang-4:
+    what: The final value of 'do' is returned
+    code:
+      - 5
+      - 8
+    expect: 8
+
+  lang-5:
+    what: Assigning a variable returns the value
+    code:
+      - foo=: 9
+    expect: 9
+
+  lang-6:
+    what: Assigned variables can be resolved
+    code:
+      - foo=: 3
+      - bar=: 9
+      - .bar
+    expect: 9
+
+  lang-7:
+    what: Apply-syntax assignments work
+    code:
+      - [let, foo, 1]
+      - .foo
+    expect: 1
+
+  lang-8:
+    what: Inner 'do' will create a new variable scope
+    code:
+      - foo=: 9
+      - -do: [foo=: 1] # Assignment to 'foo' is scoped
+      - .foo
+    expect: 9
+
+  lang-9:
+    what: array will create a new scope
+    code:
+      - foo=: 9
+      - -id`: [1, 2, foo=: 8]
+      - .foo
+    expect: 9
+
+  lang-10:
+    what: map will create a new scope
+    code:
+      - foo=: 9
+      - -id::
+          foo: [let, foo, 2]
+          bar: 3
+      - .foo
+    expect: 9
+
+  bad-apply:
+    what: First argument of application must be a callable
+    code:
+      - [5, 2]
+    rescue: ["invalid-apply", 5, [2]]
+
+  bad-key-suffix:
+    what: The ";" char is not a valid key suffix
+    code:
+      - [foo;: 5]
+    rescue: ["invalid-key-suffix", "foo;", 5]

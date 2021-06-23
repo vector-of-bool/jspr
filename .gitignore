@@ -1,0 +1,11 @@
+# Ephemeral
+__pycache__/
+_build/
+.pytest_cache/
+.mypy_cache/
+
+# IDE Files
+.vscode/settings.json
+
+# pyenv
+.python-version
