@@ -26,11 +26,11 @@ JSON/YAML document.
 Here is a very simple `jspr` program written as a YAML document:
 
 ```yaml
-- user-home:
+- user-home=:
   - if: .isWindows
   - then: [getenv: Profile]
   - else: [getenv: HOME]
-- [print: 'User home directory is "{}"', with`: [.user-home]]
+- [print: 'User home directory is "{}"', with:seq: [.user-home]]
 ```
 
 This will simply print the directory path of the user's home directory, which is
@@ -48,7 +48,7 @@ highlighting. The equivalent document in raw JSON is somewhat uglier:
     {"then": [{"getenv": "Profile"}]},
     {"else": [{"getenv": "HOME"}]}
   ]},
-  [{"print": "User home directory is \"{}\""}, {"with`": [".user-home"]}]
+  [{"print": "User home directory is \"{}\""}, {"with": ["seq", [".user-home"]]}]
 ]
 ```
 

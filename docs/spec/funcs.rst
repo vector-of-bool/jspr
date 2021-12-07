@@ -19,7 +19,7 @@ Beyond just implementing the :doc:`language evaluation rules <lang>` and the
 define the core functions.
 
 
-.. function:: apply(func: Applicable, with: Array | KeywordList) -> Value
+.. function:: apply(func: Applicable, with: Sequence | KeywordSequence) -> Value
 
   :param func: An applicable object.
   :param with: A set of arguments to give to other applicable object.
@@ -28,13 +28,13 @@ define the core functions.
 
   :raise: ``['invalid-apply-func', func, with]`` if ``func`` is not
       :ref:`Applicable <spec.lang.applicable>`.
-  :raise: ``['invalid-apply-args', func, with]`` if ``with`` is not an array
-      nor a :ref:`KeywordList <spec.lang.kwlist>`
+  :raise: ``['invalid-apply-args', func, with]`` if ``with`` is not a sequence
+      nor a :ref:`KeywordSequence <spec.lang.kwseq>`
 
   ::
 
     - func=: .add
-    - args=`: [1, [add: 4, and: 9]]
+    - args=:seq: [1, [add: 4, and: 9]]
     - - assert:
         - eq: [apply: .func, with: .args]
         - and: 14
@@ -42,7 +42,7 @@ define the core functions.
   ::
 
     - func=: 6
-    - args=`: [3, [add: 1, and: 3]]
+    - args=:seq: [3, [add: 1, and: 3]]
     # Raises [invalid-apply-func, 88, [1, 2]]
     - [apply: .func, with: .args]
 
@@ -53,6 +53,8 @@ define the core functions.
   :param expression: An arbitrary value to treat as a ``jspr`` program.
   :param with: An environment to use when evaluating. If omitted, creates a new
       empty environment with only the default values.
+
+  :raise: ``['invalid-eval-env', with]`` if ``with`` is not an environment.
 
   Equivalent to language-level ``eval-expr(expression, with)``. Refer:
   :ref:`spec.lang.eval-expr`.
@@ -97,7 +99,7 @@ define the core functions.
   :param a: The left-hand of the ``+`` operation
   :param and: The right-hand of the ``+`` operation
 
-  Implements arithmetic operations. The naming of the right-hand argument is purposeful, to facilitate easier reading when using with KeywordList syntax::
+  Implements arithmetic operations. The naming of the right-hand argument is purposeful, to facilitate easier reading when using with KeywordSequence syntax::
 
     - a=: [mul: 6, by: 7]
     - b=: [add: .a, and: 88]
@@ -124,23 +126,23 @@ define the core functions.
           - and: 1
 
 
-.. function:: join(arg: Array, , ...with: Array) -> Array:
+.. function:: join(arg: Sequence, , ...with: Sequence) -> Sequence:
               join(arg: String, , ...with: String) -> String:
 
   :param arg: The left-hand of the join.
   :param with: The right-hand of the join. Any number of operands may be
       supplied.
 
-  Concatenates strings and arrays. Either all parameters must be arrays, or all
-  parameters must be strings.
+  Concatenates strings and sequences. Either all parameters must be sequences,
+  or all parameters must be strings.
 
   :raise: ``["invalid-join", left, right]`` if any operands are not of the same
       type.
 
 
-.. function:: len(arg: String|Array|Map|KeywordList) -> Integer:
+.. function:: len(arg: String|Sequence|Map|KeywordSequence) -> Integer:
 
-  :param arg: The string, array, map, or keyword list to inspect.
+  :param arg: The string, sequence, map, or keyword sequence to inspect.
 
   Obtain the number of elements in the given object.
 
@@ -154,12 +156,12 @@ define the core functions.
 
 
 .. function:: elem(arg: String, at: Integer) -> String
-              elem(arg: Array, at: Integer) -> Value
+              elem(arg: Sequence, at: Integer) -> Value
 
-  :param arg: The string or array to access
+  :param arg: The string or sequence to access
   :param at: The zero-based index to obtain
 
-  Obtain the value at the zero-based index ``at`` from the given array or
+  Obtain the value at the zero-based index ``at`` from the given sequence or
   string. If ``at`` is a negative integral value, ``at`` should be treated as
   ``[add: .at, and: [len: arg]]`` (That is: ``len(arg) - abs(at)``)
 
@@ -176,12 +178,13 @@ define the core functions.
     - [assert: [eq: foo, and: [elem: .arr, at: 0]]]
 
 
-.. function:: slice(arg: String | Array, ...) -> String|Array
+.. function:: slice(arg: String, ...) -> String
+              slice(arg: Sequence, ...) -> Sequence
               slice(arg, from: Integer)
               slice(arg, to: Integer)
               slice(arg, from, to)
 
-  :param arg: A string or array.
+  :param arg: A string or sequence.
   :param from: The zero-based start index. If omitted, ``from`` is ``0``.
   :param to: The zero-based end index. If omitted, ``to`` is ``[len: arg]``.
 
@@ -190,7 +193,7 @@ define the core functions.
   ``n``, they should be treated as ``[add, .n, [len: arg]]`` (That is:
   ``len(arg) - abs(n)``
 
-  :raise: ``['invalid-slice-seq', arg]`` if ``arg`` is not a string or array.
+  :raise: ``['invalid-slice-seq', arg]`` if ``arg`` is not a string or sequence.
   :raise: ``['invalid-slice-from', from]`` if ``from`` is not an integer.
   :raise: ``['invalid-slice-to', to]`` if ``to`` is not an integer.
   :raise: ``['invalid-slice-range', seq, from, to]`` if ``[from, to)`` is not a

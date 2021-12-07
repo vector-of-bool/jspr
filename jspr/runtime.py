@@ -5,7 +5,8 @@ Types for the JSPR runtime functions and function handling
 from __future__ import annotations
 
 import enum
-from typing import Any, Callable, Iterable, Iterator, Optional, Protocol, Type, TypeVar, Union, Mapping, Sequence, cast
+from typing import Any, Callable, Generic, Iterable, Iterator, Optional, Protocol, Type, TypeVar, Union, Mapping as PyMapping, Sequence as PySequence, cast
+from typing_extensions import TypeGuard
 
 #: Unbounded type variable
 T = TypeVar('T')
@@ -14,7 +15,7 @@ T = TypeVar('T')
 Atom = Union[str, int, float, bool, None]
 
 #: A recrusive JSON-like data structure
-JSONData = Union[Atom, Sequence['JSONData'], Mapping[str, 'JSONData']]
+JSONData = Union[Atom, PySequence['JSONData'], PyMapping[str, 'JSONData']]
 
 
 class UndefinedType(enum.Enum):
@@ -49,16 +50,21 @@ class JSPRException(BaseException):
         return self._value
 
 
-class Function:
-    def __init__(self, func: Callable[[Arguments], Value]) -> None:
+class Function(Generic[T]):
+    def __init__(self, func: Callable[[Arguments], T]) -> None:
         self._func = func
 
-    def __call__(self, args: Arguments, env: Environment) -> Value:
+    def __call__(self, args: Arguments, env: Environment) -> T:
         args = eval_args(env.new_child(), args)
         return self._func(args)
 
     def __repr__(self) -> str:
         return f'<Function {self._func!r}>'
+
+    @property
+    def fn(self) -> Callable[[Arguments], T]:
+        """The function that is wrapped"""
+        return self._func
 
 
 class SpecialForm:
@@ -74,7 +80,7 @@ class SpecialForm:
 
 
 def eval_args(env: Environment, args: Arguments) -> Arguments:
-    if isinstance(args, KeywordList):
+    if isinstance(args, KeywordSequence):
         return eval_kwlist(env, args)
     else:
         return eval_arglist(env, args)
@@ -88,9 +94,9 @@ def eval_kw_pairs(env: Environment, pairs: Iterable[tuple[str, Value]]) -> Itera
     return (eval_kw_pair(env, pair) for pair in pairs)
 
 
-def eval_kwlist(env: Environment, args: KeywordList) -> KeywordList:
+def eval_kwlist(env: Environment, args: KeywordSequence) -> KeywordSequence:
     pairs = eval_kw_pairs(env, args)
-    return KeywordList(pairs)
+    return KeywordSequence(pairs)
 
 
 def eval_kw_pair(env: Environment, pair: tuple[str, Value]) -> tuple[str, Value]:
@@ -153,7 +159,13 @@ class Environment:
     def __getitem__(self, key: str) -> Value:
         found = self.lookup(key)
         if found is Undefined:
-            raise NameError(f'No "{key}" value in the current context')
+            raise KeyError(f'No "{key}" value in the current context')
+        return found
+
+    def __jspr_getattr__(self, key: str) -> Value:
+        found = self.lookup(key)
+        if found is Undefined:
+            raise JSPRException(['env-name-error', key])
         return found
 
     def __contains__(self, key: str) -> bool:
@@ -168,12 +180,12 @@ class Environment:
         eval = cast(Applicable, eval)
         return eval([expr], self)
 
-    def eval_seq(self, expr: Value) -> Value:
-        eval_seq = self.lookup('__eval_seq__')
+    def eval_do_seq(self, expr: Value) -> Value:
+        eval_seq = self.lookup('__eval_do_seq__')
         if eval_seq is Undefined:
-            raise RuntimeError(f'No "__eval_seq__" is defined in the environment')
+            raise RuntimeError(f'No "__eval_do_seq__" is defined in the environment')
         if not callable(eval_seq):
-            raise RuntimeError(f'The "__eval_seq__" is this environment is not callable')
+            raise RuntimeError(f'The "__eval_do_seq__" is this environment is not callable')
         eval_seq = cast(Applicable, eval_seq)
         return eval_seq([expr], self)
 
@@ -205,7 +217,7 @@ class Environment:
 KeywordPairIterable = Iterable[tuple[str, 'Value']]
 
 
-class KeywordList:
+class KeywordSequence:
     def __init__(self, keywords: KeywordPairIterable) -> None:
         self.keywords = tuple(keywords)
         self._to_inspect = list(key for key, _ in self.keywords[1:])
@@ -251,7 +263,7 @@ class KeywordList:
         unused_str = ', '.join(f'"{s}"' for s in self._to_inspect)
         raise TypeError(f'Unexpected arguments: {unused_str}')
 
-    def match(self, pairs: Mapping[str, T]) -> Optional[T]:
+    def match(self, pairs: PyMapping[str, T]) -> Optional[T]:
         given_keys = set(self.keys())
         for keylist, func in pairs.items():
             keyset = set(keylist.split(','))
@@ -261,7 +273,7 @@ class KeywordList:
 
 
 class Closure:
-    def __init__(self, arglist: Sequence[str], body: Value, env: Environment) -> None:
+    def __init__(self, arglist: PySequence[str], body: Value, env: Environment) -> None:
         self.name = '<closure>'
         self.arglist = arglist
         self.body = body
@@ -270,7 +282,7 @@ class Closure:
     def __call__(self, args: Arguments, caller_env: Environment) -> Value:
         args = eval_args(caller_env, args)
         inner_env = Environment(parent=self.env)
-        if isinstance(args, KeywordList):
+        if isinstance(args, KeywordSequence):
             from .util import unpack_kwlist
             args = unpack_kwlist(self.name, args, self.arglist[1:])
         for key, arg in zip(self.arglist, args):
@@ -290,13 +302,22 @@ class Macro:
 """
 A value that is present in the JSPR runtime. Can be anything, but can be narrowed down with some checks.
 """
-Value = Union[Atom, JSONData, 'Applicable', Any, Mapping['Value', 'Value'], Sequence['Value']]
-
-PositionalArgs = Sequence[Value]
-Arguments = Union[PositionalArgs, KeywordList]
+Value = Union[Atom, JSONData, 'Applicable', Any, 'Map', 'Sequence']
+Map = PyMapping[str, Value]
+Sequence = PySequence[Value]
+PositionalArgs = PySequence[Value]
+Arguments = Union[PositionalArgs, KeywordSequence]
 
 PositionalFunction = Callable[[PositionalArgs], Value]
-KeywordFunction = Callable[[KeywordList], Value]
+KeywordFunction = Callable[[KeywordSequence], Value]
+
+
+def is_map(m: Value) -> TypeGuard[Map]:
+    return isinstance(m, PyMapping)
+
+
+def is_sequence(m: Value) -> TypeGuard[Sequence]:
+    return isinstance(m, PySequence) and not isinstance(m, str)
 
 
 class Applicable(Protocol):

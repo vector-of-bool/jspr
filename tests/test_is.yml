@@ -1,0 +1,134 @@
+cases:
+  is-1:
+    what: Simple boolean
+    code:
+      - [is: true]
+    expect: true
+
+  is-or-1:
+    what: Simple 'or' operation
+    code:
+      - [is: true, or: false]
+    expect: true
+
+  is-or-2:
+    what: Check that 'or' short-circuits
+    code:
+      - [is: true, or: [raise: 72]]
+    expect: true
+
+  is-or-3:
+    what: Check that 'or' evaluates operands
+    code:
+      - [is: [eq: 3, and: 5], or: [eq: 6, and: 6]]
+    expect: true
+
+  is-or-4:
+    what: Check that 'or' short-circuits at the right time
+    code:
+      - [is: [eq, 3, 5], or: [eq, 6, 6], or: [raise: 72]]
+    expect: true
+
+  is-and-1:
+    what: Check that 'and' short-circuits
+    code:
+      - [is: true, and: [raise: 55]]
+    rescue: 55
+
+  is-and-2:
+    what: Check that 'and' evaluates operands
+    code:
+      - [is: [eq, 6, 7], and: [raise: 7]]
+    expect: false
+
+  is-2:
+    what: Check combination of 'or' with 'and'
+    code:
+      # prettier-ignore
+      - [is: [eq, 5, 6],
+          or: [eq, 8, 2],
+          or: [eq, s, s],
+          and: [eq, 1, 2]]
+    expect: false
+
+  is-gt-1:
+    what: Compare two objects with 'is'
+    code:
+      - [is: 4, gt: 7]
+    expect: false
+
+  is-gt-2:
+    what: Compare two objects with 'is' 2
+    code:
+      - [is: 7, gt: 2]
+    expect: true
+
+  is-gt-3:
+    what: Compare with a binop
+    code:
+      - [is: 71, greater-than: 9, and: [is: 9, gt: 3]]
+    expect: true
+
+  is-lt-1:
+    what: Compare using less-than
+    code:
+      - [is: 4, less-than: 88]
+    expect: true
+
+  is-lt-2:
+    what: Compare less-than
+    env:
+      foo: 9
+    code:
+      - [is: 6, less-than: .foo]
+    expect: true
+
+  is-lt-3:
+    what: Compare less-than
+    env:
+      foo: 9
+      bar: 2
+    code:
+      - [is: .foo, lte: .bar]
+    expect: false
+
+  is-eq-1:
+    what: Check equivalent
+    env:
+      foo: 6
+    code:
+      - [is: .foo, eq: [add, 4, 2]]
+    expect: true
+
+  is-eq-2:
+    what: Check equivalent
+    env:
+      foo: 8
+      bar: 9
+    code:
+      - [is: .foo, neq: .bar]
+    expect: true
+
+  is-in-1:
+    what: Check seq membership
+    env:
+      foo: dog
+      animals: [cat, dog, hamster]
+    code:
+      - [is: .foo, in: .animals]
+    expect: true
+
+  is-in-2:
+    what: Check seq membership 2
+    env:
+      animal: cat
+      animals: [cow, pig, parrot]
+    code:
+      - [is: .animal, not-in: .animals]
+    expect: true
+
+  is-pos:
+    what: is requires keyword args
+    code:
+      - [is, true]
+    rescue: [invalid-is-args, [true]]

@@ -24,8 +24,8 @@ implementation must also define the core special forms.
 
   :param seq: An array of ``jspr`` expressions.
 
-  Equivalent to ``eval-seq(seq, env)``. Refer: :ref:`eval-seq
-  <spec.lang.eval-seq>`
+  Equivalent to ``eval-do-seq(seq, env)``. Refer: :ref:`eval-do-seq
+  <spec.lang.eval-do-seq>`
 
   Evaluates an array of ``jspr`` expressions from ``seq`` in the order that they
   appear in ``seq``. Expressions are evaluated in a new child environment.
@@ -81,22 +81,25 @@ implementation must also define the core special forms.
 
   :returns: The value that was bound.
 
-  Evaluates ``name`` to a string ``varname``, and evaluates ``be`` into ``varval``. Updates the current environment ``env`` so that the name ``varname`` is defined to be ``varval``. ``let`` returns ``varval``.
+  Evaluates ``name`` to a string ``varname``, and evaluates ``be`` into
+  ``varval``. Updates the current environment ``env`` so that the name
+  ``varname`` is defined to be ``varval``. ``let`` returns ``varval``.
 
 
 .. function:: ref(name) -> Value:
 
   :param name: The name to look up.
 
-  Evaluates ``name`` to a string ``varname``. Returns ``env-lookup(env, varname)``. Refer: :ref:`env-lookup <spec.lang.env-lookup>`.
+  Evaluates ``name`` to a string ``varname``. Returns
+  ``env-lookup(env, varname)``. Refer: :ref:`env-lookup <spec.lang.env-lookup>`.
 
 
-.. function:: array(arr: Array) -> Array:
+.. function:: seq(seq: Sequence) -> Sequence:
 
-  :param arr: An array of expressions.
+  :param seq: An sequence of expressions.
 
-  Returns ``eval-array(arr, env)``. Refer:
-  :ref:`eval-array <spec.lang.eval-array>`.
+  Returns ``eval-seq(seq, env)``. Refer:
+  :ref:`eval-seq <spec.lang.eval-seq>`.
 
 
 .. function:: map(m: Map) -> Map:
@@ -104,6 +107,11 @@ implementation must also define the core special forms.
   :param m: A map value
 
   Returns ``eval-map(m, env)``. Refer: :ref:`eval-map <spec.lang.eval-map>`.
+
+
+.. function:: __env__() -> Environment:
+
+  Returns the current environment object.
 
 
 .. function:: or(or: Value, or: Value, ...) -> bool

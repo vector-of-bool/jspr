@@ -27,71 +27,181 @@ cases:
       - ""
     expect: ""
 
-  array-1:
-    what: Empty arrays are treated as empty arrays
+  string-5:
+    what: Map lookup
+    env:
+      foo:
+        bar:
+          baz: 99
+    code:
+      - .foo.bar.baz
+    expect: 99
+
+  string-6:
+    what: No such attribute
+    env:
+      foo:
+        bar: 3
+    code:
+      - .foo.baz
+    rescue: [no-such-attr, { bar: 3 }, baz]
+
+  string-7:
+    what: Not a map
+    env:
+      foo: 442
+    code:
+      - .foo.bar
+    rescue: [no-such-attr, 442, bar]
+
+  string-8:
+    what: String interpolation
+    env:
+      foo: 99
+    code:
+      - "I have #{foo} sandwhiches"
+    expect: I have 99 sandwhiches
+
+  string-9:
+    what: String interpolation 2
+    env:
+      foo:
+        bar: 84
+        baz: 31
+    code:
+      - "'bar' is #{foo.bar}, and 'baz' is #{foo.baz}"
+    expect: "'bar' is 84, and 'baz' is 31"
+
+  string-10:
+    what: Escaped interpolation
+    code:
+      - "This is escaped `#{eggs}"
+    expect: "This is escaped #{eggs}"
+
+  string-11:
+    what: Not-actually escaped interpolation
+    env:
+      foo:
+        bar: 42
+    code:
+      - "Answer: ``#{foo.bar}"
+    expect: "Answer: ``42"
+
+  string-12:
+    what: Some escaped, some not
+    env:
+      foo: 423
+    code:
+      - "Result of `#{foo} is #{foo}"
+    expect: "Result of #{foo} is 423"
+
+  string-13:
+    what: Unterminated interpolator
+    code:
+      - "I am a #{string"
+    rescue: ["unterminated-string-interp", "string"]
+
+  string-14:
+    what: null interpolates as "null"
+    env:
+      foo: null
+    code:
+      - "foo is #{foo}"
+    expect: "foo is null"
+
+  let-1:
+    what: let defines variables
+    code:
+      - [let, foo, 45]
+      - .foo
+    expect: 45
+
+  let-2:
+    what: let evaluates arguments
+    code:
+      - [let, foo, [id, 44]]
+      - .foo
+    expect: 44
+
+  let-3:
+    what: First arg to 'let' must be a string
+    code:
+      - [let, 7, foo]
+    rescue: ["invalid-varname", 7]
+
+  let-4:
+    what: "'let' returns its value"
+    code:
+      - [let, foo, [id, 831]]
+    expect: 831
+
+  let-5:
+    what: "'let' evaluates vars in a new scope"
+    env:
+      bar: 5
+    code:
+      - [let, foo, [let, bar, 44]]
+      - .bar
+    expect: 5
+
+  let-6:
+    what: Shorthand variable assignment
+    code:
+      - foo=: 4
+      - .foo
+    expect: 4
+
+  let-7:
+    what: Shorthand assignment returns its value
+    code:
+      - foo=: 922
+    expect: 922
+
+  seq-1:
+    what: Empty seqs are treated as empty seqs
     code:
       - []
     expect: []
 
-  array-2:
-    what: Arrays are treated as call expressions
+  seq-2:
+    what: Sequences are treated as call expressions
     code:
       - [id, 5]
     expect: 5
 
-  array-3:
-    what: First array element is resolved as a callable
+  seq-3:
+    what: First seq element is resolved as a callable
     code:
       - [[id, .id], String]
     expect: String
 
-  array-4:
-    what: Quoted array literals are evaluated
+  seq-4:
+    what: Quoted seq literals are evaluated
     code:
-      - [array, [1, 2, 3]]
+      - [seq, [1, 2, 3]]
     expect: [1, 2, 3]
 
-  array-5:
-    what: Non-array arguments are invalid
-    code:
-      - [array, 5]
-    rescue: [invalid-array, 5]
-
-  array-6:
-    what: Strings are not arrays
-    code:
-      - [array, string]
-    rescue: [invalid-array, string]
-
-  array-7:
-    what: Variable references to an array is invalid. Must be an array expression.
-    env:
-      arr: [1, 2, 3]
-    code:
-      - [array, .arr]
-    rescue: [invalid-array, .arr]
-
-  array-8:
-    what: Subexpressions in arrays are evaluated
+  seq-5:
+    what: Subexpressions in seqs are evaluated
     env:
       foo: 7
     code:
-      - [array, [1, 2, .foo, [id, 8]]]
+      - [seq, [1, 2, .foo, [id, 8]]]
     expect: [1, 2, 7, 8]
 
-  array-9:
-    what: Arrays receive their own scope
+  seq-6:
+    what: Sequences receive their own scope
     code:
       - foo=: 9
-      - [array, [1, 2, [let, foo, 3], 4]]
+      - [seq, [1, 2, [let, foo, 3], 4]]
       - .foo
     expect: 9
 
-  array-10:
+  seq-7:
     what: Argument evaluation gets its own scope
     code:
       - foo=: 30
-      - [id: [let, foo, 2]]
+      - [id, [let, foo, 2]]
       - .foo
     expect: 30
 
@@ -120,12 +230,12 @@ cases:
     expect: [foo, bar]
 
   kwlist-5:
-    what: Keys with a backtick array-quote their argument
+    what: Keys with a backtick seq-quote their argument
     env:
       foo: 8
       bar: 9
     code:
-      - [id`: [.foo, .bar]]
+      - [id:seq: [.foo, .bar]]
     expect: [8, 9]
 
   kwlist-6:
@@ -139,36 +249,74 @@ cases:
   kwlist-7:
     what: Keys with a hyphen evaluate each element of their argument
     code:
-      - [id-: [foo, bar]]
+      - [id:do: [foo, bar]]
     expect: bar
 
   kwlist-8:
-    what: Array-quotes require array expressions
+    what: Array-quotes require seq expressions
     code:
-      - [id`: 6]
-    rescue: [invalid-array-quote, id`, 6]
+      - [id:seq: 6]
+    rescue: [invalid-seq, 6]
 
   kwlist-9:
-    what: Seq-quotes require array expressions
+    what: Seq-quotes require seq expressions
     code:
-      - [id-: 9]
-    rescue: [invalid-do-quote, id-, 9]
+      - [id:do: 9]
+    rescue: [invalid-do, 9]
 
   kwlist-10:
-    what: Array-quotes must be direct arrays
+    what: Array-quotes must be direct seqs
     env:
       foo: [1, 2, 3]
     code:
-      - [id`: .foo]
-    rescue: [invalid-array-quote, id`, .foo]
+      - [id:seq: .foo]
+    rescue: [invalid-seq, .foo]
 
   kwlist-11:
-    what: Do-quotes require direct arrays
+    what: Do-quotes require direct seqs
     env:
       foo: [1, 2, 3]
     code:
-      - [id-: .foo]
-    rescue: [invalid-do-quote, id-, .foo]
+      - [id:do: .foo]
+    rescue: [invalid-do, .foo]
+
+  map-1:
+    what: Bare maps are escaped
+    env:
+      foo: 31
+    code:
+      - [map, { foo: .foo }]
+    expect: { foo: 31 }
+
+  map-2:
+    what: Shorthand for quoted map
+    env:
+      foo: 56812
+    code:
+      - [id:map: { foo: .foo }]
+    expect: { foo: 56812 }
+
+  map-3:
+    what: Invalid quoted map
+    code:
+      - [map, not-a-map]
+    rescue: [invalid-map, not-a-map]
+
+  map-4:
+    what: Invalid shorthand map quote
+    code:
+      - [id:map: 292]
+    rescue: [invalid-map, 292]
+
+  map-5:
+    what: Map gets its own scope
+    code:
+      - foo=: 33
+      - m=: [map, { foo: [let, foo, 9] }]
+      - [seq, [.foo, .m]]
+    expect:
+      - 33
+      - { foo: 9 }
 
   do-1:
     what: Empty 'do' is null
@@ -176,9 +324,9 @@ cases:
     expect: null
 
   do-2:
-    what: Auto-array a map with a leading hyphen
+    what: Auto-seq a map with a leading hyphen
     code:
-      - -id-:
+      - -id:do:
           - 1
           - 2
           - 3
@@ -193,8 +341,17 @@ cases:
   do-4:
     what: Invalid bare map quote
     code:
-      - -id:: 8
-    rescue: [invalid-map-quote, "-id:", 8]
+      - -id:map: 8
+    rescue: [invalid-map, 8]
+
+  do-5:
+    what: Wrap 'do' using normalized pair
+    code:
+      - -id:do:
+          - 4
+          - 5
+          - 6
+    expect: 6
 
   raise-1:
     what: do will re-raise errors
@@ -254,10 +411,10 @@ cases:
     expect: 9
 
   lang-9:
-    what: array will create a new scope
+    what: seq will create a new scope
     code:
       - foo=: 9
-      - -id`: [1, 2, foo=: 8]
+      - -id:seq: [1, 2, foo=: 8]
       - .foo
     expect: 9
 
@@ -265,7 +422,7 @@ cases:
     what: map will create a new scope
     code:
       - foo=: 9
-      - -id::
+      - -id:map:
           foo: [let, foo, 2]
           bar: 3
       - .foo

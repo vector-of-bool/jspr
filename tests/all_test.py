@@ -39,12 +39,12 @@ def test_evaluate(filepath: Path, casename: str, case: Case) -> None:
 
     code = case['code']
     if 'expect' in case:
-        result = env.eval_seq(code)
+        result = env.eval_do_seq(code)
         expected = case['expect']
         assert result == expected
     elif 'rescue' in case:
         try:
-            result = env.eval_seq(code)
+            result = env.eval_do_seq(code)
             pytest.fail('Expected a failure, but none occurred')
         except JSPRException as e:
             assert e.value == case['rescue']

@@ -32,7 +32,7 @@ What does it look like? "*Show me the code!*"
 Here is a very simple ``jspr`` program written as a YAML document::
 
   - user-home=: [if: .isWindows, then: [getenv: Profile], else: [getenv: HOME]]
-  - [print: 'User home directory is "{}"', with`: [.user-home]]
+  - [print: 'User home directory is "{}"', with:seq: [.user-home]]
 
 This will simply print the directory path of the user's home directory, which is
 obtained from either the ``Profile`` or the ``HOME`` environment variable,

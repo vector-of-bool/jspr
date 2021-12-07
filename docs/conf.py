@@ -37,11 +37,11 @@ class JSPRLexer(YamlLexer):
     name = 'JSPR'
     aliases = ['jspr']
 
-    VARSET_RE = (r'([ ]*)([\w.@-]+)(=[`\'-]?:)(?=[ ]|$)', bygroups(Text, Name.Variable, Punctuation))
+    VARSET_RE = (r'([ ]*)([\w.@-]+)(=(\'|(:.+?))?:)(?=[ ]|$)', bygroups(Text, Name.Variable, Punctuation))
     VARREF_RE = (r'([ ]*)(\.)([\w.@-]+)', bygroups(Text, Punctuation, Name.Variable))
-    KEYWORD_RE = (r'([ ]*)(if|then|else|do|quote|lambda|let|assert)([`\'-]?:)(?=[ ]|$)',
+    KEYWORD_RE = (r'([ ]*)(if|then|else|do|quote|lambda|let|assert)((\'|(:.+?))?:)(?=[ ]|$)',
                   bygroups(Text, Keyword, Punctuation))
-    KEY_COLON = (r'''([^,:?\[\]{}"'\n][^,:?\[\]{}\n]+)([\'`-]?:)(?=[ ]|$)''', bygroups(Name.Tag, Punctuation))
+    KEY_COLON = (r'''([^,:?\[\]{}"'\n][^,:?\[\]{}\n]+)((\'|(:.+?))?:)(?=[ ]|$)''', bygroups(Name.Tag, Punctuation))
     prepend = [
         VARSET_RE,
         VARREF_RE,

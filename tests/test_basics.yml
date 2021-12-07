@@ -1,9 +1,10 @@
+---
 cases:
   apply-1:
     what: Check that 'apply' works
     code:
       - func=: .add
-      - args=`: [1, [add: 4, and: 9]]
+      - args=:seq: [1, [add: 4, and: 9]]
       - -assert:
           - eq: [apply: .func, with: .args]
           - and: 14
@@ -17,13 +18,24 @@ cases:
       - [apply: .func, with: .args]
     rescue: [invalid-apply-func, 88, [1, 2]]
 
-  # apply-3:
-  #   what: Check 'apply' with a non-array arglist
-  #   code:
-  #     - func=: .add
-  #     - args=: 552
-  #     - [apply: .func, with: .args]
-  #   rescue: [invalid-apply-args, __something__, 552]
+  env-1:
+    what: __env__ is okay
+    code:
+      - [__env__]
+      - 4
+    expect: 4
+
+  env-2:
+    what: __env__ takes no arguments
+    code:
+      - [__env__, 6]
+    rescue: [invalid-args, __env__, [6]]
+
+  env-3:
+    what: Bad env lookup via "ref"
+    code:
+      - [ref: "nonesuch"]
+    rescue: [env-name-error, nonesuch]
 
   eval-1:
     what: Evaluate a simple expression
@@ -31,6 +43,12 @@ cases:
       - res=: [eval': [add: 1, and: 4], with: [__env__]]
       - .res
     expect: 5
+
+  eval-2:
+    what: Evaluate raises if given non-env
+    code:
+      - [eval': 2, with: 44]
+    rescue: [invalid-eval-env, 44]
 
   math-1:
     what: Simple addition
@@ -143,6 +161,110 @@ cases:
       - .foo
     expect: 28
 
+  cond-8:
+    what: cond with invalid branch expressions is invalid
+    code:
+      - -cond:
+          - [true, 5]
+          - not-a-pair
+    rescue: [invalid-cond-branch, not-a-pair]
+
+  cond-9:
+    what: cond invalid branches 2
+    code:
+      - -cond:
+          - [true, 5]
+          - [too, many, elements]
+    rescue: [invalid-cond-branch, [too, many, elements]]
+
+  cond-10:
+    what: Cond with too many args
+    code:
+      - [cond, 3, 4, 5]
+    rescue: [invalid-args, [3, 4, 5], '"cond" expects exactly one argument']
+
+  cond-11:
+    what: Cond with too few arguments
+    code:
+      - [cond]
+    rescue: [invalid-args, [], '"cond" expects exactly one argument']
+
+  cond-12:
+    what: Cond expects an array argument
+    code:
+      - [cond, nope]
+    rescue: [invalid-args, [nope], '"cond" expects a literal sequence argument']
+
+  compare-1:
+    what: Compare two numbers
+    code:
+      - [compare, 3, 4]
+    expect: lt
+
+  compare-2:
+    what: Compare two strings
+    code:
+      - [compare, foo, bar]
+    expect: gt
+
+  compare-3:
+    what: Compare two sequences
+    code:
+      - [compare:seq: [1, 2, 3], with:seq: [1, 3, 2]]
+    expect: lt
+
+  compare-4:
+    what: Compare using macros
+    code:
+      - [lt, 4, 1]
+    expect: false
+
+  compare-5:
+    what: Compare gt
+    code:
+      - [gt, 7, 3]
+    expect: true
+
+  compare-6:
+    what: Compare gte
+    code:
+      - [gte, 9, 9]
+    expect: true
+
+  compare-7:
+    what: Compare lte
+    code:
+      - [lte, 8, 22]
+    expect: true
+
+  compare-8:
+    what: Invalid comparison
+    code:
+      - [compare: 4, with: str]
+    rescue: [invalid-compare, 4, str]
+
+  compare-9:
+    what: Compare objects
+    code:
+      - [compare': { a: b }, with': { a: c }]
+    expect: lt
+
+  same-1:
+    what: Sameness 1
+    code:
+      - [let, foo, [seq, [1, 2, 3]]]
+      - [let, bar, .foo]
+      - [same, .foo, .bar]
+    expect: true
+
+  same-2:
+    what: Sameness 2
+    code:
+      - [let, foo, [seq, [1, 2, 3]]]
+      - [let, bar, [seq, [1, 2, 3]]]
+      - [same, .foo, .bar]
+    expect: false
+
   if-1:
     what: Simple if branch
     code:
@@ -175,34 +297,39 @@ cases:
     what: if branch cond scope is not shared
     code:
       - foo=: 92
-      - - if-: [[let, foo, 7], [eq, .foo, 7]]
+      - - if:do: [[let, foo, 7], [eq, .foo, 7]]
         - then: [assert, [eq, .foo, 92]]
         - else: [raise, Nope]
       - .foo
     expect: 92
 
   do-1:
+    what: do returns a value
     code:
       - [do, [5]]
     expect: 5
 
   do-2:
+    what: do retains the scope
     code:
       - foo=: 8
       - .foo
     expect: 8
 
   do-3:
+    what: do requires an sequence
     code:
       - [do, 8]
     rescue: ["invalid-do", 8]
 
   do-4:
+    what: quoted-do still requires a sequence
     code:
-      - [print: "Something", q-: 4]
-    rescue: ["invalid-do-quote", q-, 4]
+      - -do: 4
+    rescue: ["invalid-do", 4]
 
   let-1:
+    what: Define and use variables
     code:
       - [let: b, be: 5]
       - [let: c, be: 8]
@@ -210,6 +337,7 @@ cases:
     expect: 13
 
   let-2:
+    what: Define and use variables 2
     # prettier-ignore
     code:
       - [{
@@ -222,32 +350,33 @@ cases:
     expect: 110
 
   let-3:
+    what: Define and use variables 3
     code:
       - [do, [[let, egg, 13], [add, .egg, 12]]]
     expect: 25
 
   let-4:
+    what: Define a variable with a shorthand
     code:
       - a=: 66
       - .a
     expect: 66
 
   let-5:
+    what: Define and use variables 4
     code:
       - [let, foo, 5]
       - .foo
     expect: 5
 
-  bad-name:
-    code: [.nonesuch]
-    rescue: ["env-name-error", "nonesuch"]
-
   quote-1:
+    what: Quoting a literal
     code:
       - [quote: 3]
     expect: 3
 
   quote-2:
+    what: Quoting map values works
     code:
       - -map:
           foo: [quote: 3]
@@ -255,6 +384,7 @@ cases:
     expect: { foo: 3, bar: 6 }
 
   quote-3:
+    what: Quoting complex values does no evaluation
     code:
       - [quote: { foo: [quote: 3], bar: [add: 3, and: 65] }]
     expect:
@@ -262,6 +392,7 @@ cases:
       bar: [add: 3, and: 65]
 
   quote-4:
+    what: Quote shorthand
     code:
       - -map:
           foo': [bar: baz]
@@ -269,6 +400,7 @@ cases:
       foo: [bar: baz]
 
   quote-5:
+    what: Quote with 'let'
     code:
       - [let: a, be': { foo: bar }]
       - .a
@@ -276,6 +408,7 @@ cases:
       foo: bar
 
   quote-6:
+    what: Quote shorthand with a quote shorthand within it
     code:
       - [let: a, be': { foo': baz }]
       - .a
@@ -283,27 +416,31 @@ cases:
       foo': baz
 
   quote-7:
+    what: map-quote
     code:
-      - [let: a, be:: { foo': baz }]
+      - [let: a, be:map: { foo': baz }]
       - .a
     expect:
       foo: baz
 
   quote-8:
+    what: quoting an argument that is a function name
     code:
       - [add': 3, and: 7]
     expect: 10
 
   quote-9:
+    what: Setting variables by quoting .strings
     code:
       - [let': .value, be: 3]
-      - ..value
+      - [ref': .value]
     expect: 3
 
   quote-10:
+    what: seq-quote shorthand
     code:
       - [let: foo, be: 33]
-      - [let: bar, be`: [bar, .foo]]
+      - [let: bar, be:seq: [bar, .foo]]
       - .bar
     expect: [bar, 33]
 
@@ -311,18 +448,20 @@ cases:
     what: Map quotes receive their own scope
     code:
       - foo=: 3
-      - -id::
+      - -id:map:
           foo: [let, foo, 4]
       - .foo
     expect: 3
 
   lambda-1:
+    what: A simple function, positional cal
     code:
       - [let: fun, be: [lambda: [a, b], is: [add: .a, and: .b]]]
       - [fun, 6, 7]
     expect: 13
 
   lambda-2:
+    what: A simple function 2
     code:
       - plus=: 6
       - fun=: [lambda: [a, b], is: [add, .a, [add, .plus, .b]]]
@@ -330,75 +469,107 @@ cases:
     expect: 19
 
   lambda-3:
+    what: A simple function using kwlist-call
     code:
       - my-mult=: [lambda: [val, with], is: [mul: .val, by: .with]]
       - [my-mult: 7, with: 3]
     expect: 21
 
   lambda-4:
+    what: Multi-statement body of a function
     expect: 72
     code:
       - fun=:
           - lambda: [val]
-          - is:
-              - do:
-                  - square=: [mul, .val, .val]
-                  - [add, .square, .val]
+          - is:do:
+              - square=: [mul, .val, .val]
+              - [add, .square, .val]
       - [fun, 8]
 
   lambda-5:
+    what: Function body does not affect caller scope
     code:
       - some-var=: 8
       - func=:
           - lambda: [foo]
-          - is:
-              - do:
-                  - some-var=: 9
-                  - [add: .some-var, and: .foo]
+          - is:do:
+              - some-var=: 9
+              - [add: .some-var, and: .foo]
       - result=: [func, 1]
-      - [or: [eq: .result, and: 10], or: [raise`: ["failed", .result]]]
+      - [or: [eq: .result, and: 10], or: [raise:seq: ["failed", .result]]]
       - .some-var
     expect: 8
 
   lambda-6:
+    what: Simple local variable
     code:
       - func=:
           - lambda: [a]
-          - is-:
+          - is:do:
               - o=: 9
               - [sub: .o, minus: .a]
-      - [apply: .func, with`: [1]]
+      - [apply: .func, with:seq: [1]]
     expect: 8
 
   or-1:
+    what: Short-circuit 'or'
     code:
       - [or: false, or: [eq: 5, and: 8], or: [neq, 6, 1], or: [raise: Ouch]]
     expect: true
 
   or-2:
+    what: Short-circuit will fall through
     code:
       - [or: false, or: [eq: 5, and: 8], or: [raise: Ouch]]
     rescue: Ouch
 
   or-3:
+    what: Non-bool condition is an error
     code:
       - foo=: 4
       - [or: false, or: .foo, or: [raise: Nope]]
     rescue: [invalid-or-condition, 4]
 
+  and-1:
+    what: Conditional conjuction
+    code:
+      - [and: true, and: [eq: 4, and: 4]]
+    expect: true
+
+  and-2:
+    what: Conjunction 2
+    code:
+      - [and: true, and: [eq, 3, 1]]
+    expect: false
+
+  and-3:
+    what: and will short-circuit
+    code:
+      - [and: false, and: [raise: 42]]
+    expect: false
+
+  and-4:
+    what: and requires a boolean operand
+    code:
+      - [and: true, and: 44]
+    rescue: [invalid-and-condition, 44]
+
   macro-1:
+    what: A simply macro that is a value
     code:
       - m=: [macro: [], is: Something]
       - [m]
     expect: Something
 
   macro-2:
+    what: Macro that returns an expression
     code:
       - [let: m, be: [macro: [a], is: [[ref: .a], 99, 74]]]
       - [m, add]
     expect: 173
 
   macro-3:
+    what: Macro is evaluated after expansion
     code:
       - m=: [macro: [], is': .value]
       - value=: 92
@@ -406,24 +577,28 @@ cases:
     expect: 92
 
   raise-1:
+    what: Simple error
     code:
       - [raise: 4]
     rescue: 4
 
   join-1:
+    what: Array joining
     code:
-      - a=`: [1, 2, 3, 4]
-      - b=`: [3, 1, 7, 1]
+      - a=:seq: [1, 2, 3, 4]
+      - b=:seq: [3, 1, 7, 1]
       - c=: [join: .a, with: .b]
       - .c
     expect: [1, 2, 3, 4, 3, 1, 7, 1]
 
   join-2:
+    what: String joining
     code:
-      - [join: I am a string, with`: [I, am, an, array]]
+      - [join: I am a string, with:seq: [I, am, an, array]]
     rescue: [invalid-join, I am a string, [I, am, an, array]]
 
   assert-1:
+    what: Assertion fails
     code:
       - [assert: true]
       - [assert: [eq: 1, and: 1]]
@@ -432,6 +607,7 @@ cases:
     rescue: ["assertion-failed", [eq: 4, and: 1], [eq: 4, and: 1]]
 
   assert-2:
+    what: Assertion expands kwlist values
     code:
       - [assert: true]
       - foo=: 881
@@ -439,6 +615,7 @@ cases:
     rescue: [assertion-failed, [eq: 1, and: .foo], [eq: 1, and: 881]]
 
   assert-3:
+    what: Assertion expands array values
     code:
       - [assert: true]
       - foo=: 881
@@ -446,44 +623,51 @@ cases:
     rescue: [assertion-failed, [eq, 1, .foo], [eq, 1, 881]]
 
   eq-1:
+    what: Simple equivalence
     code:
       - [assert: [eq, 5, [add, 3, 2]]]
     expect: null
 
   div-1:
+    what: Check division and floordivision
     code:
-      - - assert:
-            - eq: [div: 3, by: 2]
-            - and: 1.5
-      - - assert:
-            - eq: [floordiv: 3, by: 2]
-            - and: 1
+      - -assert:
+          - eq: [div: 3, by: 2]
+          - and: 1.5
+      - -assert:
+          - eq: [floordiv: 3, by: 2]
+          - and: 1
     expect: null
 
   len-1:
+    what: Length of a string
     code:
       - [len: "Hello"]
     expect: 5
 
   len-2:
+    what: Check length of string, seq, and map
     code:
       - [assert: [eq: 5, and: [len: "Hello"]]]
       - [assert: [eq: 2, and: [len': [1, 2]]]]
-      - [assert: [eq: 3, and: [len:: { a: b, c: d, e: f }]]]
+      - [assert: [eq: 3, and: [len:map: { a: b, c: d, e: f }]]]
       - [len': [1, 2, 3]]
     expect: 3
 
   len-3:
+    what: Length of a quoted map
     code:
       - [len': { a: b, c: d, e: f }]
     expect: 3
 
   len-4:
+    what: Length of a bool is an error
     code:
       - [len: true]
     rescue: [invalid-len, true]
 
   elem-1:
+    what: Get a seq element
     code:
       - arr=': [foo, bar, baz]
       - [assert: [eq: bar, and: [elem: .arr, at: 1]]]
@@ -493,32 +677,35 @@ cases:
     expect: null
 
   elem-2:
+    what: Out-of-bounds is an error
     code:
       - arr=': [foo, bar, baz]
       - [elem: .arr, at: 3]
-    expect: ["invalid-elem-index", [foo, bar, baz], 3]
+    rescue: ["invalid-elem-index", [foo, bar, baz], 3]
 
   slice-1:
+    what: Get a sliec of a sequences
     code:
       - arr=': [1, 2, 3, 4, 5, 6]
-      - - assert:
-            - eq': [1, 2, 3]
-            - and: [slice: .arr, to: 3]
-      - - assert:
-            - eq': [3, 4, 5, 6]
-            - and: [slice: .arr, from: 2]
-      - - assert:
-            - eq': [1, 2, 3]
-            - and: [slice: .arr, to: -3]
-      - - assert:
-            - eq': [3, 4, 5, 6]
-            - and: [slice: .arr, from: -4]
-      - - assert:
-            - eq': []
-            - and: [slice: .arr, from: -1, to: 5]
+      - -assert:
+          - eq': [1, 2, 3]
+          - and: [slice: .arr, to: 3]
+      - -assert:
+          - eq': [3, 4, 5, 6]
+          - and: [slice: .arr, from: 2]
+      - -assert:
+          - eq': [1, 2, 3]
+          - and: [slice: .arr, to: -3]
+      - -assert:
+          - eq': [3, 4, 5, 6]
+          - and: [slice: .arr, from: -4]
+      - -assert:
+          - eq': []
+          - and: [slice: .arr, from: -1, to: 5]
     expect: null
 
   slice-2:
+    what: Get an invalid slice is an error
     code:
       - arr=': [1, 2, 3]
       - [slice: .arr, from: 2, to: 1]

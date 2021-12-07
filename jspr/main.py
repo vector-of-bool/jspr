@@ -1,5 +1,5 @@
 import argparse
-from jspr.evaluator import Context
+from jspr.runtime import Environment
 from pathlib import Path
 import json
 import sys
@@ -28,7 +28,7 @@ def main(argv: Sequence[str]) -> int:
         doc = json.load(sys.stdin)
     else:
         doc = json.loads(args.file.read_text())
-    ctx = Context.root_jspr_context()
+    ctx = Environment.root_jspr_context()
     value = ctx.eval(doc)
     print(repr(value))
     return 0
