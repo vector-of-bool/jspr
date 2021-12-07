@@ -5,9 +5,9 @@ Types for the JSPR runtime functions and function handling
 from __future__ import annotations
 
 import enum
-from typing import Any, Callable, Generic, Iterable, Iterator
-from typing import Mapping as PyMapping
-from typing import Optional
+import functools
+import inspect
+from typing import (Any, Callable, Generic, Iterable, Iterator, Mapping, Optional)
 from typing import Sequence as PySequence
 from typing import Type, TypeVar, Union, cast
 
@@ -20,7 +20,7 @@ T = TypeVar('T')
 Atom = Union[str, int, float, bool, None]
 
 #: A recrusive JSON-like data structure
-JSONData = Union[Atom, PySequence['JSONData'], PyMapping[str, 'JSONData']]
+JSONData = Union[Atom, PySequence['JSONData'], Mapping[str, 'JSONData']]
 
 
 class UndefinedType(enum.Enum):
@@ -70,6 +70,19 @@ class Function(Generic[T]):
     def fn(self) -> Callable[[Arguments], T]:
         """The function that is wrapped"""
         return self._func
+
+    @classmethod
+    def from_py(cls, name: str, fn: Callable[..., T]) -> Function[T]:
+        sig = inspect.signature(fn)
+        kw_names = list(sig.parameters.keys())[1:]
+        from .util import unpack_kwlist
+
+        @functools.wraps(fn)
+        def invoke(args: Arguments) -> T:
+            al = unpack_kwlist(name, args, kw_names)
+            return fn(*al)
+
+        return cls(invoke)
 
 
 class SpecialForm:
@@ -164,7 +177,7 @@ class Environment:
     def __getitem__(self, key: str) -> Value:
         found = self.lookup(key)
         if found is Undefined:
-            raise KeyError(f'No "{key}" value in the current context')
+            raise JSPRException(['env-name-error', key])
         return found
 
     def __jspr_getattr__(self, key: str) -> Value:
@@ -174,7 +187,7 @@ class Environment:
         return found
 
     def __contains__(self, key: str) -> bool:
-        return self[key] is not Undefined
+        return self.lookup(key) is not Undefined
 
     def eval(self, expr: Value) -> Value:
         eval = self.lookup('__eval__')
@@ -240,14 +253,17 @@ class KeywordSequence:
     def __len__(self) -> int:
         return len(self.keywords)
 
-    def try_get(self, key: str) -> Maybe[Value]:
-        for k, value in self.keywords:
+    def try_get(self, key: str, *, ignore_first: bool = False) -> Maybe[Value]:
+        kws = self.keywords
+        if ignore_first and kws:
+            kws = kws[1:]
+        for k, value in kws:
             if k == key:
                 return value
         return Undefined
 
-    def get(self, key: str) -> Value:
-        found = self.try_get(key)
+    def get(self, key: str, *, ignore_first: bool = False) -> Value:
+        found = self.try_get(key, ignore_first=ignore_first)
         if found is Undefined:
             raise ValueError(f'Missing keyword argument "{key}"')
         return found
@@ -257,7 +273,7 @@ class KeywordSequence:
 
     def __repr__(self) -> str:
         pairs = (f'{k!r}={val!r}' for k, val in self)
-        return f'<KeywordList [{", ".join(pairs)}]>'
+        return f'<KeywordSequence [{", ".join(pairs)}]>'
 
     def keys(self) -> Iterator[str]:
         return (k for k, _ in self.keywords[1:])
@@ -268,7 +284,7 @@ class KeywordSequence:
         unused_str = ', '.join(f'"{s}"' for s in self._to_inspect)
         raise TypeError(f'Unexpected arguments: {unused_str}')
 
-    def match(self, pairs: PyMapping[str, T]) -> Optional[T]:
+    def match(self, pairs: Mapping[str, T]) -> Optional[T]:
         given_keys = set(self.keys())
         for keylist, func in pairs.items():
             keyset = set(keylist.split(','))
@@ -277,7 +293,7 @@ class KeywordSequence:
         return None
 
 
-class Closure:
+class MacroClosure:
     def __init__(self, arglist: PySequence[str], body: Value, env: Environment) -> None:
         self.name = '<closure>'
         self.arglist = arglist
@@ -285,8 +301,8 @@ class Closure:
         self.env = env
 
     def __call__(self, args: Arguments, caller_env: Environment) -> Value:
-        args = eval_args(caller_env, args)
         inner_env = Environment(parent=self.env)
+        inner_env.define('__recurse__', self)
         if isinstance(args, KeywordSequence):
             from .util import unpack_kwlist
             args = unpack_kwlist(self.name, args, self.arglist[1:])
@@ -295,20 +311,40 @@ class Closure:
         return inner_env.eval(self.body)
 
 
+class Closure(MacroClosure):
+    def __call__(self, args: Arguments, caller_env: Environment) -> Value:
+        args = eval_args(caller_env, args)
+        return super().__call__(args, caller_env)
+
+
 class Macro:
     def __init__(self, func: Applicable) -> None:
         self._func = func
 
-    def __call__(self, args: Arguments, env: Environment) -> Value:
-        new_code = self._func(args, env)
-        return env.eval(new_code)
+    def __call__(self, args: Arguments, caller_env: Environment) -> Value:
+        new_code = self._func(args, caller_env)
+        return caller_env.eval(new_code)
+
+
+def quasiquote(val: Value, env: Environment) -> Value:
+    if isinstance(val, (str, int, float, bool)):
+        return val
+    if is_sequence(val):
+        if len(val) == 2 and val[0] == 'unquote':
+            return env.eval(val[1])
+        if len(val) == 1 and is_map(val[0]) and next(iter(val[0].keys())) == 'unquote':
+            return env.eval(next(iter(val[0].values())))
+        return [quasiquote(v, env) for v in val]
+    if is_map(val):
+        return {quasiquote(k, env): quasiquote(v, env) for k, v in val.items()}
+    return val
 
 
 """
 A value that is present in the JSPR runtime. Can be anything, but can be narrowed down with some checks.
 """
 Value = Union[Atom, JSONData, 'Applicable', Any, 'Map', 'Sequence']
-Map = PyMapping[str, Value]
+Map = Mapping[str, Value]
 Sequence = PySequence[Value]
 PositionalArgs = PySequence[Value]
 Arguments = Union[PositionalArgs, KeywordSequence]
@@ -318,7 +354,7 @@ KeywordFunction = Callable[[KeywordSequence], Value]
 
 
 def is_map(m: Value) -> TypeGuard[Map]:
-    return isinstance(m, PyMapping)
+    return isinstance(m, Mapping)
 
 
 def is_sequence(m: Value) -> TypeGuard[Sequence]:

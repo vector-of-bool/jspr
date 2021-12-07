@@ -2,16 +2,14 @@ from __future__ import annotations
 
 import itertools
 import re
-from typing import Any
-from typing import Mapping as PyMapping
-from typing import NoReturn
+from typing import Any, NoReturn
 from typing import Sequence as PySequence
 from typing import cast
 
 from typing_extensions import TypeGuard
 
-from jspr.runtime import (Applicable, Arguments, Environment, JSPRException, KeywordSequence, Map, Sequence, Undefined,
-                          Value, is_map, is_sequence)
+from jspr.runtime import (Applicable, Arguments, Environment, JSPRException, KeywordSequence, Map, Sequence, T, Value,
+                          is_map, is_sequence)
 
 VALID_IDENT_RE = re.compile(r'[a-zA-Z_](?:[\w_\d-]*[\w_\d])?')
 UNESCAPED_INTERP_SPLIT = re.compile(r'(.*?[^`](?:``)*)#\{(.*)')
@@ -20,10 +18,9 @@ UNESCAPED_INTERP_SPLIT = re.compile(r'(.*?[^`](?:``)*)#\{(.*)')
 def eval_expression(val: Value, env: Environment) -> Value:
     if isinstance(val, str):
         return eval_expr_string(val, env)
-    if isinstance(val, PySequence):
+    if is_sequence(val):
         return eval_expr_seq(val, env)
-    if isinstance(val, PyMapping):
-        val = cast(Map, val)
+    if is_map(val):
         return eval_expr_map(val, env)
     if isinstance(val, (bool, int, float)) or val is None:
         return val
@@ -64,23 +61,23 @@ def _to_str(v: Any) -> str:
     return str(v)
 
 
-def ref_str_lookup(env: Environment, key: str) -> Value:
-    path = key.split('.')
-    value = env
-    while path:
-        attr = path[0]
-        value = attribute_lookup(value, attr)
-        path.pop(0)
-    return value
+def ref_str_lookup(obj: Value, key: str) -> Value:
+    if '.' not in key:
+        return attr_lookup(obj, key)
+    idx = key.index('.')
+    pkey = key[:idx]
+    tail = key[idx + 1:]
+    next_ = attr_lookup(obj, pkey)
+    return ref_str_lookup(next_, tail)
 
 
-def attribute_lookup(map: Any, key: str) -> Value:
-    fail = lambda: raise_(['no-such-attr', map, key])
-    if hasattr(map, '__jspr_getattr__'):
-        return map.__jspr_getattr__(key)
+def attr_lookup(obj: Any, key: str) -> Value:
+    fail = lambda: raise_(['no-such-attr', obj, key])
+    if hasattr(obj, '__jspr_getattr__'):
+        return obj.__jspr_getattr__(key)
     try:
-        if hasattr(map, '__getitem__'):
-            return map[key]
+        if hasattr(obj, '__getitem__'):
+            return obj[key]
         fail()
     except AttributeError as e:
         if e.args[0] is key:
@@ -122,7 +119,7 @@ def eval_expr_map(m: Map, env: Environment) -> Value:
         raise_(['invalid-bare-map', m])
     varname = nkey[:-1]
     varvalue = eval_expression(nval, env)
-    env.define(varname, varvalue)
+    set_env_val(env, varname, varvalue)
     return varvalue
 
 
@@ -133,6 +130,13 @@ def eval_do_seq(seq: Value, env: Environment) -> Value:
     for expr in seq:
         ret = eval_expression(expr, env)
     return ret
+
+
+def set_env_val(env: Environment, key: str, val: T) -> T:
+    if key in env:
+        raise_(['already-named', key, val])
+    env.define(key, val)
+    return val
 
 
 def raise_(value: Value) -> NoReturn:
@@ -172,13 +176,13 @@ def normalize_pair(key: str, value: Value) -> tuple[str, Value]:
         nkey = key[:idx]
         ntail = key[idx + 1:]
         nvalue = normalize_pair(ntail, value)
-        if len(nkey) and not nkey[-1].isalnum() and nkey[-1] != '=':
+        if len(nkey) and not nkey[-1].isalnum() and nkey[-1] not in '=_':
             raise_(['invalid-key-suffix', nkey, nvalue])
         return (nkey, nvalue)
     if key.endswith("'"):
         key = key[:-1]
         return (key, ['quote', value])
-    if len(key) and not key[-1].isalnum() and key[-1] != '=':
+    if len(key) and not key[-1].isalnum() and key[-1] not in '=_':
         raise_(['invalid-key-suffix', key, value])
     return (key, value)
 

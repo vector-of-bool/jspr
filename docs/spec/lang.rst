@@ -32,6 +32,8 @@ used:
   unspecified. At minimum, a ``jspr`` implementation is only required to support
   string keys, and duplicate keys are not required to be supported.
 
+.. _spec.lang.env:
+
 *Environment*
   An "Environment" is a mutable set of named values available as ambient state.
   The contents of the initial Environment must include the core ``jspr`` special
@@ -107,22 +109,43 @@ JSON-compatible input value should be "evaluated" to new result value.
 
 #. If the string ``string`` begins with an ASCII period "``.``":
 
-  #. Let ``varname`` be ``string[1:]``.
-  #. Return ``env-lookup(env, varname)``
+  #. Let ``s`` be ``string[1:]``.
+  #. Return ``ref-str-lookup(s, key)``
 
 #. Otherwise, return ``string``
 
 
-.. _spec.lang.env-lookup:
+.. _spec.lang.ref-str-lookup:
 
-``env-lookup(env: Environment, key: String)``
+``ref-str-lookup(obj: Value, key: String)``
+-------------------------------------------
+
+#. If ``key`` does not contain an ASCII period "``.``":
+   #. Return ``attr-lookup(obj, key)``
+#. Othewise, let ``N`` be the index of the first ASCII period "``.``" in ``key``.
+#. Let ``pkey`` be ``key[:N]``
+#. Let ``tail`` be ``key[N+1:]``
+#. Let ``next`` be ``attr-lookup(obj, pkey)``
+#. Return ``ref-str-lookup(next, tail)``
+
+
+.. _spec.lang.attr-lookup:
+
+``attr-lookup(obj: Value, key: String)``
 ---------------------------------------------
 
-#. If a value named ``key`` is defined in ``env``, return that value.
-#. Otherwise, if ``env`` has a parent environment ``par``, return
-   ``env-lookup(par, key)``
-#. Otherwise, do ``raise(["env-name-error", key])``. (This does not return a
-   value.)
+#. If ``obj`` is an :ref:`Environment <spec.lang.env>` ``e``:
+   #. If a value named ``key`` is defined in ``e``, return that value.
+   #. If ``e`` has a parent environment ``par``, return ``attr-lookup(par, key)``
+   #. Otherwise, do ``raise(["env-name-error", key])``
+#. Otherwise, if ``obj`` is a map ``m``:
+   #. If ``key`` names a valid key of ``m``, return the value of that key
+   #. Otherwise, do ``raise(["key-error", m, key])``
+#. Otherwise, if ``obj`` is any implementation-defined object that supports
+   dot-attribute access, return the value for ``key`` in an
+   implementation-defined manner.
+#. Otherwise, do ``raise(["attr-error", obj, key])``. (This does not
+   return a value.)
 
 
 ``eval-expr-seq(seq: Sequence, env: Environment)``
@@ -164,8 +187,18 @@ JSON-compatible input value should be "evaluated" to new result value.
    do ``raise(['invalid-bare-map', m])``
 #. Otherwise, Let ``varname`` be `nkey[:-1]``.
 #. Let ``varvalue`` be the result of ``eval-expr(nval, env)``
-#. Define the value named by ``varname`` within ``env`` to be ``varvalue``.
+#. Do `set-env-val(env, varname, varvalue)``
 #. Return ``varvalue``.
+
+
+.. _spec.lang.set-env-val:
+
+``set-env-val(env: Environment, key: String, value: Value)``
+------------------------------------------------------------
+
+#. If ``key`` already names a value in ``env`` or in any of its transitive
+   parents, do ``raise(['aready-named', key, value])``.
+#. Otherwise, define ``value`` in ``env`` to be named by ``key``
 
 
 .. _spec.lang.eval-do-seq:

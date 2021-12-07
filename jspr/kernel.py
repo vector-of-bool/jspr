@@ -10,15 +10,16 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator
 from typing import Mapping as PyMapping
 from typing import NamedTuple, NoReturn
 from typing import Sequence as PySequence
-from typing import cast
+from typing import Type, cast
 
 from typing_extensions import Literal
 
 from jspr import lang
 from jspr.util import not_kwlist, unary, unpack_kwlist
 
-from .runtime import (Applicable, Arguments, Closure, Environment, Function, JSPRException, KeywordSequence, Macro, Map,
-                      Sequence, SpecialForm, Undefined, Value, eval_kw_pair, is_map, is_sequence)
+from .runtime import (Applicable, Arguments, Closure, Environment, Function, JSPRException, KeywordSequence, Macro,
+                      MacroClosure, Map, Sequence, SpecialForm, T, Undefined, Value, eval_kw_pair, is_map, is_sequence,
+                      quasiquote)
 
 
 @SpecialForm
@@ -71,13 +72,19 @@ def quote_sf(args: Arguments, _env: Environment) -> Value:
 
 
 @SpecialForm
+def quasiquote_sf(args: Arguments, env: Environment) -> Value:
+    val = unary('quasiquote', args)
+    return quasiquote(val, env)
+
+
+@SpecialForm
 def let_sf(args: Arguments, env: Environment) -> Value:
     name, value = unpack_kwlist('let', args, ('be', ))
     name = env.eval(name)
     value = env.new_child().eval(value)
     if not isinstance(name, str):
         raise JSPRException(['invalid-varname', 7])
-    env.define(name, value)
+    lang.set_env_val(env, name, value)
     return value
 
 
@@ -109,12 +116,12 @@ def map_sf(args: Arguments, env: Environment) -> Map:
     return lang.eval_map(map, env)
 
 
-def _mk_closure(fn_name: str, env: Environment, args: Arguments) -> Closure:
+def _mk_closure(fn_name: str, env: Environment, args: Arguments, *, cls: Type[T] = Closure) -> T:
     arglist, body = unpack_kwlist(fn_name, args, ('is', ))
     if not is_sequence(arglist) or any((not isinstance(s, str)) for s in arglist):
         raise RuntimeError(f'First argument to "{fn_name}" must be a list of strings (arglist={arglist!r})')
     arglist = cast(PySequence[str], arglist)
-    return Closure(arglist, body, env.clone())
+    return cls(arglist, body, env.clone())
 
 
 @SpecialForm
@@ -124,7 +131,7 @@ def lambda_sf(args: Arguments, env: Environment) -> Closure:
 
 @SpecialForm
 def macro_sf(args: Arguments, env: Environment) -> Macro:
-    closure = _mk_closure('macro', env, args)
+    closure = _mk_closure('macro', env, args, cls=MacroClosure)
     return Macro(closure)
 
 
@@ -293,6 +300,32 @@ def slice_fn(args: Arguments) -> Value:
 @Function
 def id_fn(args: Arguments) -> Value:
     val = unary('id', args)
+    return val
+
+
+@Function
+def iota_fn(args: Arguments) -> PySequence[int]:
+    frm = 0
+    to = 0
+    if len(args) == 1:
+        to = unary('iota', args)
+    else:
+        frm, to = unpack_kwlist('iota', args, ['to'])
+    if not isinstance(frm, int) or not isinstance(to, int):
+        lang.raise_(['invalid-iota-arg', [frm, to], '`iota` expects integer arguments'])
+    return range(frm, to)
+
+
+@SpecialForm
+def reduce_fn(args: Arguments, env: Environment) -> Value:
+    args = lang.eval_args(args, env)
+    seq, val, by = unpack_kwlist('reduce', args, ['from', 'by'])
+    if not isinstance(seq, Iterable):
+        lang.raise_(['invalid-reduce-args', [seq, val, by], 'The first argument must be iterable'])
+    if not callable(by):
+        lang.raise_(['invalid-reduce-args', [seq, val, by], 'The "by" argument of reduce must be a callable object'])
+    for x in seq:
+        val = by([val, x], env.new_child())
     return val
 
 
@@ -494,6 +527,7 @@ def load_kernel(env: Environment) -> None:
     env.define_fn('lambda', lambda_sf)
     env.define_fn('macro', macro_sf)
     env.define_fn('quote', quote_sf)
+    env.define_fn('quasiquote', quasiquote_sf)
     env.define_fn('do', do_sf)
     env.define_fn('let', let_sf)
     env.define_fn('ref', ref_sf)
@@ -512,6 +546,8 @@ def load_kernel(env: Environment) -> None:
     env.define_fn('elem', elem_fn)
     env.define_fn('slice', slice_fn)
     env.define_fn('id', id_fn)
+    env.define_fn('iota', iota_fn)
+    env.define_fn('reduce', reduce_fn)
     env.define_fn('+', _make_binop('add', 'and', operator.add))
     env.define_fn('add', _make_binop('add', 'and', operator.add))
     env.define_fn('-', _make_binop('sub', 'minus', operator.sub))

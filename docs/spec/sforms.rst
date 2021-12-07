@@ -82,8 +82,8 @@ implementation must also define the core special forms.
   :returns: The value that was bound.
 
   Evaluates ``name`` to a string ``varname``, and evaluates ``be`` into
-  ``varval``. Updates the current environment ``env`` so that the name
-  ``varname`` is defined to be ``varval``. ``let`` returns ``varval``.
+  ``varval``. Do ``set-env-val(env, varname, varval)`` (Refer:
+  :ref:`set-env-val <spec.lang.set-env-val>`). Return ``varval``.
 
 
 .. function:: ref(name) -> Value:
@@ -91,7 +91,8 @@ implementation must also define the core special forms.
   :param name: The name to look up.
 
   Evaluates ``name`` to a string ``varname``. Returns
-  ``env-lookup(env, varname)``. Refer: :ref:`env-lookup <spec.lang.env-lookup>`.
+  ``ref-str-lookup(__env__, varname)``. Refer: :ref:`ref-str-lookup
+  <spec.lang.ref-str-lookup>`.
 
 
 .. function:: seq(seq: Sequence) -> Sequence:

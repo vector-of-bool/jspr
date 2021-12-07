@@ -1,9 +1,12 @@
 import argparse
-from jspr.runtime import Environment
-from pathlib import Path
 import json
 import sys
-from typing import NoReturn, Protocol, Sequence, cast
+from pathlib import Path
+from typing import Any, NoReturn, Sequence, cast
+
+from typing_extensions import Protocol
+
+import jspr
 
 
 def make_arg_parser() -> argparse.ArgumentParser:
@@ -21,14 +24,28 @@ def parse_argv(argv: Sequence[str]) -> ParsedArgv:
     return cast(ParsedArgv, parser.parse_args(argv))
 
 
+def _load_json(doc: bytes) -> jspr.runtime.JSONData:
+    return json.loads(doc)
+
+
+def _load_doc(doc: bytes) -> Any:
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        return _load_json(doc)
+    else:
+        return yaml.safe_load(doc)
+
+
 def main(argv: Sequence[str]) -> int:
     args = parse_argv(argv)
-    print(repr(args))
     if str(args.file) == '-':
-        doc = json.load(sys.stdin)
+        doc = _load_doc(sys.stdin.buffer.read())
     else:
-        doc = json.loads(args.file.read_text())
-    ctx = Environment.root_jspr_context()
+        doc = _load_doc(args.file.read_bytes())
+    ctx = jspr.runtime.Environment.root_jspr_context()
+    jspr.kernel.load_kernel(ctx)
+    ctx.define_fn('print', jspr.runtime.Function.from_py('print', lambda msg: print(msg)))
     value = ctx.eval(doc)
     print(repr(value))
     return 0

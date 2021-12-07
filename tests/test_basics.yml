@@ -113,24 +113,22 @@ cases:
   cond-4:
     what: cond creates a new scope
     code:
-      - foo=: 3
       - -cond:
           - - [eq: [let, foo, 5], and: 8]
             - Nope
           - - [eq: .foo, and: 3]
             - Three
       - .foo
-    expect: 3
+    rescue: [env-name-error, foo]
 
   cond-5:
     what: cond creates a new scope 2
     code:
-      - foo=: 3
       - -cond:
           - - true
             - [let, foo, 7]
       - .foo
-    expect: 3
+    rescue: [env-name-error, foo]
 
   cond-6:
     what: cond with a non-boolean branch value
@@ -142,26 +140,6 @@ cases:
     rescue: [invalid-cond-condition, 81]
 
   cond-7:
-    what: cond condition scope is separate from body scope
-    code:
-      - foo=: 28
-      - -cond:
-          # Set 'foo' to 9,
-          - - -do:
-                - foo=: 9
-                - [eq, .foo, 28] # assignment shouuld propagate
-            - -raise: Fail1
-          - - [eq, .foo, 9] # .foo should no longer be 9
-            - -raise: Fail2
-          - - -do:
-                - foo=: 8 # Set .foo to 8
-                - [eq, .foo, 8]
-            # Within the body, .foo is no longer 8
-            - -assert: [eq, .foo, 28]
-      - .foo
-    expect: 28
-
-  cond-8:
     what: cond with invalid branch expressions is invalid
     code:
       - -cond:
@@ -169,7 +147,7 @@ cases:
           - not-a-pair
     rescue: [invalid-cond-branch, not-a-pair]
 
-  cond-9:
+  cond-8:
     what: cond invalid branches 2
     code:
       - -cond:
@@ -177,19 +155,19 @@ cases:
           - [too, many, elements]
     rescue: [invalid-cond-branch, [too, many, elements]]
 
-  cond-10:
+  cond-9:
     what: Cond with too many args
     code:
       - [cond, 3, 4, 5]
     rescue: [invalid-args, [3, 4, 5], '"cond" expects exactly one argument']
 
-  cond-11:
+  cond-10:
     what: Cond with too few arguments
     code:
       - [cond]
     rescue: [invalid-args, [], '"cond" expects exactly one argument']
 
-  cond-12:
+  cond-11:
     what: Cond expects an array argument
     code:
       - [cond, nope]
@@ -286,22 +264,18 @@ cases:
   if-3:
     what: if branch creates a new scope
     code:
-      - foo=: 92
       - - if: [eq: .foo, and: 92]
         - then: [let, foo, 91]
         - else: null
-      - .foo
-    expect: 92
+    rescue: [env-name-error, foo]
 
   if-4:
     what: if branch cond scope is not shared
     code:
-      - foo=: 92
       - - if:do: [[let, foo, 7], [eq, .foo, 7]]
         - then: [assert, [eq, .foo, 92]]
         - else: [raise, Nope]
-      - .foo
-    expect: 92
+    rescue: [env-name-error, foo]
 
   do-1:
     what: do returns a value
@@ -447,11 +421,10 @@ cases:
   quote-11:
     what: Map quotes receive their own scope
     code:
-      - foo=: 3
       - -id:map:
           foo: [let, foo, 4]
       - .foo
-    expect: 3
+    rescue: [env-name-error, foo]
 
   lambda-1:
     what: A simple function, positional cal
@@ -489,7 +462,6 @@ cases:
   lambda-5:
     what: Function body does not affect caller scope
     code:
-      - some-var=: 8
       - func=:
           - lambda: [foo]
           - is:do:
@@ -498,7 +470,7 @@ cases:
       - result=: [func, 1]
       - [or: [eq: .result, and: 10], or: [raise:seq: ["failed", .result]]]
       - .some-var
-    expect: 8
+    rescue: [env-name-error, some-var]
 
   lambda-6:
     what: Simple local variable

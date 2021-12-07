@@ -3,7 +3,8 @@ General utilities
 """
 
 from typing import Sequence
-from .runtime import Arguments, JSPRException, PositionalArgs, Value, KeywordSequence
+
+from .runtime import (Arguments, JSPRException, KeywordSequence, PositionalArgs, Value)
 
 
 def not_kwlist(args: Arguments) -> PositionalArgs:
@@ -29,4 +30,4 @@ def unpack_kwlist(fn_name: str, args: Arguments, keys: Sequence[str]) -> Positio
         if len(args) != len(keys) + 1:
             raise TypeError(f'Function "{fn_name}" expects {len(keys)+1} arguments ({len(args)} given)')
         return args
-    return (args.first_arg, ) + tuple(args.get(k) for k in keys)
+    return (args.first_arg, ) + tuple(args.get(k, ignore_first=True) for k in keys)

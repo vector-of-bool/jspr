@@ -137,12 +137,11 @@ cases:
 
   let-5:
     what: "'let' evaluates vars in a new scope"
-    env:
-      bar: 5
     code:
       - [let, foo, [let, bar, 44]]
+      - .foo
       - .bar
-    expect: 5
+    rescue: [env-name-error, bar]
 
   let-6:
     what: Shorthand variable assignment
@@ -156,6 +155,20 @@ cases:
     code:
       - foo=: 922
     expect: 922
+
+  let-8:
+    what: Redefining a name is unallowed
+    code:
+      - foo=: 12
+      - foo=: 42
+    rescue: [already-named, foo, 42]
+
+  let-9:
+    what: Redefining a name is unallowed
+    code:
+      - [let: foo, be: 12]
+      - [let: foo, be: 45]
+    rescue: [already-named, foo, 45]
 
   seq-1:
     what: Empty seqs are treated as empty seqs
@@ -192,18 +205,16 @@ cases:
   seq-6:
     what: Sequences receive their own scope
     code:
-      - foo=: 9
       - [seq, [1, 2, [let, foo, 3], 4]]
       - .foo
-    expect: 9
+    rescue: [env-name-error, foo]
 
   seq-7:
     what: Argument evaluation gets its own scope
     code:
-      - foo=: 30
       - [id, [let, foo, 2]]
       - .foo
-    expect: 30
+    rescue: [env-name-error, foo]
 
   kwlist-1:
     what: Keyword syntax is evaluated
@@ -308,16 +319,6 @@ cases:
       - [id:map: 292]
     rescue: [invalid-map, 292]
 
-  map-5:
-    what: Map gets its own scope
-    code:
-      - foo=: 33
-      - m=: [map, { foo: [let, foo, 9] }]
-      - [seq, [.foo, .m]]
-    expect:
-      - 33
-      - { foo: 9 }
-
   do-1:
     what: Empty 'do' is null
     code: []
@@ -405,28 +406,25 @@ cases:
   lang-8:
     what: Inner 'do' will create a new variable scope
     code:
-      - foo=: 9
       - -do: [foo=: 1] # Assignment to 'foo' is scoped
       - .foo
-    expect: 9
+    rescue: [env-name-error, foo]
 
   lang-9:
     what: seq will create a new scope
     code:
-      - foo=: 9
       - -id:seq: [1, 2, foo=: 8]
       - .foo
-    expect: 9
+    rescue: [env-name-error, foo]
 
   lang-10:
     what: map will create a new scope
     code:
-      - foo=: 9
       - -id:map:
           foo: [let, foo, 2]
           bar: 3
       - .foo
-    expect: 9
+    rescue: [env-name-error, foo]
 
   bad-apply:
     what: First argument of application must be a callable
@@ -439,3 +437,16 @@ cases:
     code:
       - [foo;: 5]
     rescue: ["invalid-key-suffix", "foo;", 5]
+
+  defun-macro:
+    what: Define a defun macro
+    code:
+      # prettier-ignore
+      - [let: defun, be: [
+         macro: [fn-name, of, is],
+              is:quasiquote:
+                [let: [unquote: .fn-name], be: [
+                 lambda: [unquote: .of], is: [unquote: .is]]]]]
+      - [defun: foo, of: [a, b], is: [add, .a, .b]]
+      - [foo, 2, 3]
+    expect: 5
