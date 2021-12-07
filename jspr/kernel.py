@@ -2,13 +2,17 @@
 Core special forms for JSPR
 """
 
+from __future__ import annotations
+
 import operator
 from functools import reduce, wraps
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Literal
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator
 from typing import Mapping as PyMapping
 from typing import NamedTuple, NoReturn
 from typing import Sequence as PySequence
 from typing import cast
+
+from typing_extensions import Literal
 
 from jspr import lang
 from jspr.util import not_kwlist, unary, unpack_kwlist
@@ -82,7 +86,7 @@ def ref_sf(args: Arguments, env: Environment) -> Value:
     name = unary('ref', args)
     name = env.eval(name)
     if not isinstance(name, str):
-        raise RuntimeError(f'Argument to "ref" must be a string ({name=!r})')
+        raise RuntimeError(f'Argument to "ref" must be a string (name={name!r})')
     found = env.lookup(name)
     if found is Undefined:
         raise JSPRException(['env-name-error', name])
@@ -108,7 +112,7 @@ def map_sf(args: Arguments, env: Environment) -> Map:
 def _mk_closure(fn_name: str, env: Environment, args: Arguments) -> Closure:
     arglist, body = unpack_kwlist(fn_name, args, ('is', ))
     if not is_sequence(arglist) or any((not isinstance(s, str)) for s in arglist):
-        raise RuntimeError(f'First argument to "{fn_name}" must be a list of strings ({arglist=!r})')
+        raise RuntimeError(f'First argument to "{fn_name}" must be a list of strings (arglist={arglist!r})')
     arglist = cast(PySequence[str], arglist)
     return Closure(arglist, body, env.clone())
 
@@ -187,7 +191,7 @@ def assert_sf(args: Arguments, env: Environment) -> None:
 
 def _make_binop(name: str, argname: str, func: Callable[[Value, Value], Value]) -> Applicable:
     @wraps(func)
-    def binop_fn(args: Arguments, /) -> Value:
+    def binop_fn(args: Arguments) -> Value:
         left, right = unpack_kwlist(name, args, [argname])
         return func(left, right)
 

@@ -1,10 +1,17 @@
+from __future__ import annotations
+
 import itertools
 import re
-from typing import Any, Mapping as PyMapping, NoReturn, Sequence as PySequence, cast
+from typing import Any
+from typing import Mapping as PyMapping
+from typing import NoReturn
+from typing import Sequence as PySequence
+from typing import cast
+
 from typing_extensions import TypeGuard
 
-from jspr.runtime import (Applicable, Arguments, Environment, JSPRException, KeywordSequence, Map, Sequence, Value,
-                          Undefined, is_map, is_sequence)
+from jspr.runtime import (Applicable, Arguments, Environment, JSPRException, KeywordSequence, Map, Sequence, Undefined,
+                          Value, is_map, is_sequence)
 
 VALID_IDENT_RE = re.compile(r'[a-zA-Z_](?:[\w_\d-]*[\w_\d])?')
 UNESCAPED_INTERP_SPLIT = re.compile(r'(.*?[^`](?:``)*)#\{(.*)')
@@ -20,7 +27,7 @@ def eval_expression(val: Value, env: Environment) -> Value:
         return eval_expr_map(val, env)
     if isinstance(val, (bool, int, float)) or val is None:
         return val
-    raise RuntimeError(f'Unhandled value: {val=!r}')
+    raise RuntimeError(f'Unhandled value: {val!r}')
 
 
 def eval_expr_string(string: str, env: Environment) -> Value:

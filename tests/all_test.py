@@ -1,6 +1,7 @@
 from pathlib import Path
 import itertools
-from typing import Any, Mapping, TypedDict, Union, cast
+from typing import Any, Mapping, Union, cast
+from typing_extensions import TypedDict
 
 import yaml
 import pytest
@@ -15,7 +16,7 @@ TEST_FILES = list(THIS_DIR.glob('test_*.yml'))
 RescueCase = TypedDict('RescudeCase', {'code': JSONData, 'rescue': Any})
 ResultCase = TypedDict('Case', {'code': JSONData, 'expect': Any})
 Case = Union[RescueCase, ResultCase]
-_TestFileContent = TypedDict('_TestFileContent', {'cases': dict[str, Case]})
+_TestFileContent = TypedDict('_TestFileContent', {'cases': 'dict[str, Case]'})
 
 texts = ((f, f.read_text()) for f in TEST_FILES)
 yaml_docs = ((fpath, yaml.safe_load(t)) for fpath, t in texts)

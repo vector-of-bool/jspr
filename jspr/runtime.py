@@ -5,8 +5,13 @@ Types for the JSPR runtime functions and function handling
 from __future__ import annotations
 
 import enum
-from typing import Any, Callable, Generic, Iterable, Iterator, Optional, Protocol, Type, TypeVar, Union, Mapping as PyMapping, Sequence as PySequence, cast
-from typing_extensions import TypeGuard
+from typing import Any, Callable, Generic, Iterable, Iterator
+from typing import Mapping as PyMapping
+from typing import Optional
+from typing import Sequence as PySequence
+from typing import Type, TypeVar, Union, cast
+
+from typing_extensions import Protocol, TypeGuard
 
 #: Unbounded type variable
 T = TypeVar('T')
@@ -214,7 +219,7 @@ class Environment:
 
 
 #: An iterable that can be used to construct a keyword list
-KeywordPairIterable = Iterable[tuple[str, 'Value']]
+KeywordPairIterable = Iterable["tuple[str, Value]"]
 
 
 class KeywordSequence:
@@ -321,5 +326,5 @@ def is_sequence(m: Value) -> TypeGuard[Sequence]:
 
 
 class Applicable(Protocol):
-    def __call__(self, args: Arguments, env: Environment, /) -> Value:
+    def __call__(self, args: Arguments, env: Environment) -> Value:
         ...

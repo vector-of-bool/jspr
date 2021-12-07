@@ -1,6 +1,6 @@
 import pytest
 
-from .runtime import Environment, SpecialForm, JSPRException, Value
+from .runtime import Environment
 from . import kernel
 
 
