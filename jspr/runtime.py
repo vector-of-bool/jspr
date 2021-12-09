@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import enum
 import functools
-import inspect
 from typing import (Any, Callable, Generic, Iterable, Iterator, Mapping, Optional)
 from typing import Sequence as PySequence
 from typing import Type, TypeVar, Union, cast
@@ -56,31 +55,28 @@ class JSPRException(BaseException):
 
 
 class Function(Generic[T]):
-    def __init__(self, func: Callable[[Arguments], T]) -> None:
+    def __init__(self, func: Callable[[Arguments, Environment], T]) -> None:
         self._func = func
 
     def __call__(self, args: Arguments, env: Environment) -> T:
         args = eval_args(env.new_child(), args)
-        return self._func(args)
+        return self._func(args, env)
 
     def __repr__(self) -> str:
         return f'<Function {self._func!r}>'
 
     @property
-    def fn(self) -> Callable[[Arguments], T]:
+    def fn(self) -> Callable[[Arguments, Environment], T]:
         """The function that is wrapped"""
         return self._func
 
     @classmethod
-    def from_py(cls, name: str, fn: Callable[..., T]) -> Function[T]:
-        sig = inspect.signature(fn)
-        kw_names = list(sig.parameters.keys())[1:]
-        from .util import unpack_kwlist
+    def from_py(cls, fn: Callable[..., T]) -> Function[T]:
+        from .util import call_py_with_args
 
         @functools.wraps(fn)
-        def invoke(args: Arguments) -> T:
-            al = unpack_kwlist(name, args, kw_names)
-            return fn(*al)
+        def invoke(args: Arguments, _env: Environment) -> T:
+            return call_py_with_args(fn, args)
 
         return cls(invoke)
 
@@ -293,37 +289,35 @@ class KeywordSequence:
         return None
 
 
-class MacroClosure:
+class Closure:
     def __init__(self, arglist: PySequence[str], body: Value, env: Environment) -> None:
-        self.name = '<closure>'
+        self.name = ''
         self.arglist = arglist
         self.body = body
         self.env = env
 
-    def __call__(self, args: Arguments, caller_env: Environment) -> Value:
+    def __call__(self, args: Arguments, env: Environment) -> Value:
         inner_env = Environment(parent=self.env)
         inner_env.define('__recurse__', self)
         if isinstance(args, KeywordSequence):
             from .util import unpack_kwlist
             args = unpack_kwlist(self.name, args, self.arglist[1:])
+        from .lang import set_env_val
         for key, arg in zip(self.arglist, args):
-            inner_env.define(key, arg)
+            set_env_val(inner_env, key, arg)
         return inner_env.eval(self.body)
 
-
-class Closure(MacroClosure):
-    def __call__(self, args: Arguments, caller_env: Environment) -> Value:
-        args = eval_args(caller_env, args)
-        return super().__call__(args, caller_env)
+    def __repr__(self) -> str:
+        return f'<Closure "{self.name}">'
 
 
 class Macro:
     def __init__(self, func: Applicable) -> None:
         self._func = func
 
-    def __call__(self, args: Arguments, caller_env: Environment) -> Value:
-        new_code = self._func(args, caller_env)
-        return caller_env.eval(new_code)
+    def __call__(self, args: Arguments, env: Environment) -> Value:
+        new_code = self._func(args, env)
+        return env.eval(new_code)
 
 
 def quasiquote(val: Value, env: Environment) -> Value:

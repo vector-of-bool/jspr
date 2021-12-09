@@ -1,14 +1,14 @@
 from pathlib import Path
 import itertools
-from typing import Any, Mapping, Union, cast
+from typing import Any, Mapping, Optional, Union, cast
 from typing_extensions import TypedDict
 
 import yaml
 import pytest
 
-from jspr.runtime import Environment, JSPRException, JSONData, Value
+from jspr.runtime import Environment, Function, JSPRException, JSONData, Value
 from jspr.kernel import load_kernel
-# from jspr.evaluator import Context, JSONData, eval_expression
+from jspr.mod import Module
 
 THIS_DIR = Path(__file__).absolute().parent
 TEST_FILES = list(THIS_DIR.glob('test_*.yml'))
@@ -29,6 +29,24 @@ cases, cases_1 = itertools.tee(cases, 2)
 case_ids = [f'{fpath.name}/{casename}' for fpath, casename, _ in cases_1]
 
 
+def add(a: Value, b: Value) -> Value:
+    return a + b
+
+
+def manip_str(given: str, prepend: Optional[str] = None, append: Optional[str] = None) -> str:
+    if prepend is not None:
+        given = prepend + given
+    if append is not None:
+        given = given + append
+    return given
+
+
+_TEST_MODULE = Module('testmod', {
+    'add': Function.from_py(add),
+    'manip-str': Function.from_py(manip_str),
+})
+
+
 @pytest.mark.parametrize('filepath,casename,case', cases, ids=case_ids)
 def test_evaluate(filepath: Path, casename: str, case: Case) -> None:
     env = Environment()
@@ -37,6 +55,8 @@ def test_evaluate(filepath: Path, casename: str, case: Case) -> None:
     predef: Mapping[str, Value] = case.get('env', {})
     for pair in predef.items():
         env.define(pair[0], pair[1])
+
+    env.define('testmod', _TEST_MODULE)
 
     code = case['code']
     if 'expect' in case:

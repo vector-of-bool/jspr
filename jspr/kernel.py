@@ -4,22 +4,23 @@ Core special forms for JSPR
 
 from __future__ import annotations
 
+import itertools
 import operator
-from functools import reduce, wraps
+from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator
 from typing import Mapping as PyMapping
 from typing import NamedTuple, NoReturn
 from typing import Sequence as PySequence
-from typing import Type, cast
+from typing import cast
 
 from typing_extensions import Literal
 
 from jspr import lang
 from jspr.util import not_kwlist, unary, unpack_kwlist
 
-from .runtime import (Applicable, Arguments, Closure, Environment, Function, JSPRException, KeywordSequence, Macro,
-                      MacroClosure, Map, Sequence, SpecialForm, T, Undefined, Value, eval_kw_pair, is_map, is_sequence,
-                      quasiquote)
+from .mod import Module
+from .runtime import (Applicable, Arguments, Closure, Environment, Function, JSPRException, KeywordSequence, Macro, Map,
+                      Sequence, SpecialForm, Undefined, Value, eval_kw_pair, is_map, is_sequence, quasiquote)
 
 
 @SpecialForm
@@ -77,13 +78,13 @@ def quasiquote_sf(args: Arguments, env: Environment) -> Value:
     return quasiquote(val, env)
 
 
-@SpecialForm
+@Function
 def let_sf(args: Arguments, env: Environment) -> Value:
     name, value = unpack_kwlist('let', args, ('be', ))
-    name = env.eval(name)
-    value = env.new_child().eval(value)
     if not isinstance(name, str):
         raise JSPRException(['invalid-varname', 7])
+    if isinstance(value, Closure) and value.name == '':
+        value.name = name
     lang.set_env_val(env, name, value)
     return value
 
@@ -116,12 +117,12 @@ def map_sf(args: Arguments, env: Environment) -> Map:
     return lang.eval_map(map, env)
 
 
-def _mk_closure(fn_name: str, env: Environment, args: Arguments, *, cls: Type[T] = Closure) -> T:
+def _mk_closure(fn_name: str, env: Environment, args: Arguments) -> Closure:
     arglist, body = unpack_kwlist(fn_name, args, ('is', ))
     if not is_sequence(arglist) or any((not isinstance(s, str)) for s in arglist):
         raise RuntimeError(f'First argument to "{fn_name}" must be a list of strings (arglist={arglist!r})')
     arglist = cast(PySequence[str], arglist)
-    return cls(arglist, body, env.clone())
+    return Closure(arglist, body, env.clone())
 
 
 @SpecialForm
@@ -131,23 +132,20 @@ def lambda_sf(args: Arguments, env: Environment) -> Closure:
 
 @SpecialForm
 def macro_sf(args: Arguments, env: Environment) -> Macro:
-    closure = _mk_closure('macro', env, args, cls=MacroClosure)
-    return Macro(closure)
+    return Macro(_mk_closure('macro', env, args))
 
 
 @Function
-def eval_fn(args: Arguments) -> Value:
+def eval_fn(args: Arguments, env_: Environment) -> Value:
     expr, env = unpack_kwlist('eval', args, ('with', ))
     if not isinstance(env, Environment):
         raise JSPRException(['invalid-eval-env', env])
     return env.eval(expr)
 
 
-@SpecialForm
+@Function
 def apply_fn(args: Arguments, env: Environment) -> Value:
     func, arglist = unpack_kwlist('apply', args, ('with', ))
-    func = env.eval(func)
-    arglist = env.eval(arglist)
     if not callable(func):
         raise JSPRException(['invalid-apply-func', func, arglist])
     if not is_sequence(arglist) and not isinstance(arglist, KeywordSequence):
@@ -198,7 +196,7 @@ def assert_sf(args: Arguments, env: Environment) -> None:
 
 def _make_binop(name: str, argname: str, func: Callable[[Value, Value], Value]) -> Applicable:
     @wraps(func)
-    def binop_fn(args: Arguments) -> Value:
+    def binop_fn(args: Arguments, _env: Environment) -> Value:
         left, right = unpack_kwlist(name, args, [argname])
         return func(left, right)
 
@@ -206,7 +204,7 @@ def _make_binop(name: str, argname: str, func: Callable[[Value, Value], Value]) 
 
 
 @Function
-def raise_fn(args: Arguments) -> NoReturn:
+def raise_fn(args: Arguments, env: Environment) -> NoReturn:
     value = unary('raise', args)
     raise JSPRException(value)
 
@@ -220,19 +218,27 @@ def _join_two(left: Value, right: Value) -> Value:
 
 
 @Function
-def join_fn(args: Arguments) -> Sequence:
-    if len(args) < 1:
-        raise JSPRException(['no-args-join'])
-    items: Iterable[Value]
-    if isinstance(args, KeywordSequence):
-        items = [p[1] for p in args]
-    else:
-        items = list(args)
-    return reduce(_join_two, items)
+def join_fn(args: Arguments, env: Environment) -> Sequence:
+    seq = unary('join', args)
+    return list(itertools.chain.from_iterable(seq))
 
 
 @Function
-def elem_fn(args: Arguments) -> Value:
+def str_join_fn(args: Arguments, env: Environment) -> str:
+    if isinstance(args, KeywordSequence) and args.try_get('with') is not Undefined:
+        seq, joiner = unpack_kwlist('str.join', args, ['with'])
+        if not isinstance(joiner, str):
+            raise JSPRException(['invalid-str.join-with', joiner])
+    else:
+        seq = unary('str.join', args)
+        joiner = ''
+    if not isinstance(seq, Iterable):
+        raise JSPRException(['invalid-str.join-seq', seq])
+    return joiner.join(seq)
+
+
+@Function
+def elem_fn(args: Arguments, env: Environment) -> Value:
     seq, at = unpack_kwlist('elem', args, ('at', ))
     if not isinstance(seq, (str, PySequence)):
         raise JSPRException(['invalid-elem-seq', seq])
@@ -246,7 +252,7 @@ def elem_fn(args: Arguments) -> Value:
 
 
 @Function
-def len_fn(args: Arguments) -> int:
+def len_fn(args: Arguments, env: Environment) -> int:
     seq = unary('len', args)
     if isinstance(seq, (str, PySequence, PyMapping, KeywordSequence)):
         return len(seq)
@@ -254,7 +260,7 @@ def len_fn(args: Arguments) -> int:
 
 
 @Function
-def slice_fn(args: Arguments) -> Value:
+def slice_fn(args: Arguments, env: Environment) -> Value:
     if isinstance(args, KeywordSequence):
         seq = args.first_arg
         if not isinstance(seq, (str, PySequence)):
@@ -298,27 +304,31 @@ def slice_fn(args: Arguments) -> Value:
 
 
 @Function
-def id_fn(args: Arguments) -> Value:
+def id_fn(args: Arguments, env: Environment) -> Value:
     val = unary('id', args)
     return val
 
 
 @Function
-def iota_fn(args: Arguments) -> PySequence[int]:
+def iota_fn(args: Arguments, env: Environment) -> PySequence[int]:
     frm = 0
     to = 0
-    if len(args) == 1:
+    if len(args) == 0:
+        return itertools.count()
+    elif len(args) == 1:
         to = unary('iota', args)
     else:
         frm, to = unpack_kwlist('iota', args, ['to'])
+    if isinstance(frm, int) and to == 'inf':
+        return itertools.count(frm)
+
     if not isinstance(frm, int) or not isinstance(to, int):
         lang.raise_(['invalid-iota-arg', [frm, to], '`iota` expects integer arguments'])
     return range(frm, to)
 
 
-@SpecialForm
+@Function
 def reduce_fn(args: Arguments, env: Environment) -> Value:
-    args = lang.eval_args(args, env)
     seq, val, by = unpack_kwlist('reduce', args, ['from', 'by'])
     if not isinstance(seq, Iterable):
         lang.raise_(['invalid-reduce-args', [seq, val, by], 'The first argument must be iterable'])
@@ -327,6 +337,18 @@ def reduce_fn(args: Arguments, env: Environment) -> Value:
     for x in seq:
         val = by([val, x], env.new_child())
     return val
+
+
+@Function
+def iter_map_fn(args: Arguments, env: Environment) -> Value:
+    iterable, project = unpack_kwlist('iter.map', args, ['by'])
+    return (project([it], env) for it in iterable)
+
+
+@Function
+def iter_take_fn(args: Arguments, env: Environment) -> Iterable[Value]:
+    n, its = unpack_kwlist('iter.take', args, ['from'])
+    return (it for it, _ in zip(its, range(n)))
 
 
 def _lazy_eval_args(env: Environment, args: Arguments) -> Iterable[Value]:
@@ -345,10 +367,10 @@ def _hard_bool(arg: Value, err: str) -> bool:
 CompareResult = Literal['lt', 'gt', 'eq']
 
 
-def _compare_seq(left: Sequence, right: Sequence) -> CompareResult:
+def _compare_seq(left: Sequence, right: Sequence, env: Environment) -> CompareResult:
     pairs = zip(left, right)
     for lval, rval in pairs:
-        r = compare_fn.fn([lval, rval])
+        r = compare_fn.fn([lval, rval], env)
         if r != 'eq':
             return cast(CompareResult, r)
     if len(left) < len(right):
@@ -358,18 +380,18 @@ def _compare_seq(left: Sequence, right: Sequence) -> CompareResult:
     return 'eq'
 
 
-def _compare_mapping(left: PyMapping[str, Value], right: PyMapping[str, Value]) -> CompareResult:
+def _compare_mapping(left: PyMapping[str, Value], right: PyMapping[str, Value], env: Environment) -> CompareResult:
     lkeys = list(left.keys())
     rkeys = list(right.keys())
     lkeys.sort()
     rkeys.sort()
-    key_comp = _compare_seq(lkeys, rkeys)
+    key_comp = _compare_seq(lkeys, rkeys, env)
     if key_comp != 'eq':
         return key_comp
     for k in lkeys:
         lval = left[k]
         rval = right[k]
-        comp = compare_fn.fn([lval, rval])
+        comp = compare_fn.fn([lval, rval], env)
         if comp != 'eq':
             return comp
     return 'eq'
@@ -382,12 +404,12 @@ if TYPE_CHECKING:
 
 
 @_CompType
-def compare_fn(args: Arguments) -> CompareResult:
+def compare_fn(args: Arguments, env: Environment) -> CompareResult:
     left, right = unpack_kwlist('compare', args, ['with'])
     if is_sequence(left) and is_sequence(right):
-        return _compare_seq(left, right)
+        return _compare_seq(left, right, env)
     if is_map(left) and is_map(right):
-        return _compare_mapping(left, right)
+        return _compare_mapping(left, right, env)
     left: Any
     right: Any
     try:
@@ -432,17 +454,17 @@ def _do_is(args: KeywordSequence, arg_it: Iterator[tuple[str, Value]], lhs: Valu
         elif lhs is False:
             return lhs
         else:
-            lang.raise_(['invalid-is-value', lhs, args])
+            lang.raise_(['invalid-test-value', lhs, args])
     # Find the result
     oper, rhs_expr = pair
     if oper == 'and':
-        if not _hard_bool(lhs, 'invalid-is-and-condition'):
+        if not _hard_bool(lhs, 'invalid-test-and-condition'):
             return False
         rhs = env.eval(rhs_expr)
         return _do_is(args, arg_it, rhs, env)
 
     if oper == 'or':
-        if _hard_bool(lhs, 'invalid-is-or-condition'):
+        if _hard_bool(lhs, 'invalid-test-or-condition'):
             return True
         rhs = env.eval(rhs_expr)
         return _do_is(args, arg_it, rhs, env)
@@ -457,7 +479,7 @@ def _do_is(args: KeywordSequence, arg_it: Iterator[tuple[str, Value]], lhs: Valu
         new_val = lhs != rhs
     elif oper in ('gt', 'greater-than', 'lt', 'less-than', 'gte', 'lte', 'greater-or-equal-to', 'at-least',
                   'less-or-equal-to', 'at-most'):
-        comp = compare_fn.fn([lhs, rhs])
+        comp = compare_fn.fn([lhs, rhs], env)
         oper = {
             'greater-than': 'gt',
             'less-than': 'lt',
@@ -473,23 +495,23 @@ def _do_is(args: KeywordSequence, arg_it: Iterator[tuple[str, Value]], lhs: Valu
             'lte': ('lt', 'eq'),
         }[oper]
     elif oper == 'in':
-        if not is_sequence(rhs) and not is_map(rhs):
-            lang.raise_(['invalid-is-in', lhs, rhs])
-        new_val = lhs in rhs
+        if not hasattr(rhs, '__contains__'):
+            lang.raise_(['invalid-test-in', lhs, rhs])
+        new_val = lhs in cast(Iterable[Value], rhs)
     elif oper == 'not-in':
-        if not is_sequence(rhs) and not is_map(rhs):
-            lang.raise_(['invalid-is-not-in', lhs, rhs])
-        new_val = lhs not in rhs
+        if not hasattr(rhs, '__contains__'):
+            lang.raise_(['invalid-test-not-in', lhs, rhs])
+        new_val = lhs not in cast(Iterable[Value], rhs)
     else:
-        lang.raise_(['invalid-is-oper', oper, lhs, rhs])
+        lang.raise_(['invalid-test-oper', oper, lhs, rhs])
 
     return _do_is(args, arg_it, new_val, env)
 
 
 @SpecialForm
-def is_sf(args: Arguments, env: Environment) -> bool:
+def test_sf(args: Arguments, env: Environment) -> bool:
     if not isinstance(args, KeywordSequence):
-        lang.raise_(['invalid-is-args', args])
+        lang.raise_(['invalid-test-args', args])
     arg_it = iter(args)
     first_val = env.eval(next(arg_it)[1])
     return _do_is(args, arg_it, first_val, env)
@@ -517,6 +539,24 @@ def dunder_eval_do_seq(args: Arguments, env: Environment) -> Value:
     return lang.eval_do_seq(seq, env)
 
 
+class _Sequence(Module):
+    _FUNCS = {
+        'len': len_fn,
+        'elem': elem_fn,
+        'slice': slice_fn,
+        'join': join_fn,
+        'head': Function.from_py(lambda v: next(iter(v))),
+        'tail': Function.from_py(lambda s: s[1:]),
+        'seq': Function.from_py(lambda s: list(s)),
+    }
+
+    def __init__(self) -> None:
+        super().__init__('seq', _Sequence._FUNCS)
+
+    def __call__(self, args: Arguments, env: Environment) -> Value:
+        return seq_sf(args, env)
+
+
 def load_kernel(env: Environment) -> None:
     # Special forms
     env.define_fn('__env__', get_current_env_fn)
@@ -531,23 +571,31 @@ def load_kernel(env: Environment) -> None:
     env.define_fn('do', do_sf)
     env.define_fn('let', let_sf)
     env.define_fn('ref', ref_sf)
-    env.define_fn('seq', seq_sf)
+    env.define_fn('seq', _Sequence())
+    env.define('iter', Module('iter', {
+        'reduce': reduce_fn,
+        'map': iter_map_fn,
+        'take': iter_take_fn,
+        'iota': iota_fn,
+    }))
+    env.define(
+        'str',
+        Module('str', {
+            'join': str_join_fn,
+            'str': Function.from_py(lambda s: str(s)),
+            'repr': Function.from_py(lambda s: repr(s)),
+        }))
     env.define_fn('map', map_sf)
     env.define_fn('or', or_sf)
     env.define_fn('and', and_sf)
     env.define_fn('xor', xor_sf)
     env.define_fn('assert', assert_sf)
-    env.define_fn('is', is_sf)
+    env.define_fn('test', test_sf)
     # Regular predefined functions
     env.define_fn('raise', raise_fn)
     env.define_fn('apply', apply_fn)
     env.define_fn('eval', eval_fn)
-    env.define_fn('len', len_fn)
-    env.define_fn('elem', elem_fn)
-    env.define_fn('slice', slice_fn)
     env.define_fn('id', id_fn)
-    env.define_fn('iota', iota_fn)
-    env.define_fn('reduce', reduce_fn)
     env.define_fn('+', _make_binop('add', 'and', operator.add))
     env.define_fn('add', _make_binop('add', 'and', operator.add))
     env.define_fn('-', _make_binop('sub', 'minus', operator.sub))
@@ -564,10 +612,9 @@ def load_kernel(env: Environment) -> None:
     env.define_fn('!=', _make_binop('ne', 'and', operator.ne))
     env.define_fn('=!', _make_binop('ne', 'and', operator.ne))
     env.define_fn('<>', _make_binop('ne', 'and', operator.ne))
-    env.define_fn('join', join_fn)
     env.define_fn('compare', compare_fn)
-    env.define_fn('lt', _make_binop('lt', 'than', lambda l, r: compare_fn.fn([l, r]) == 'lt'))
-    env.define_fn('gt', _make_binop('gt', 'than', lambda l, r: compare_fn.fn([l, r]) == 'gt'))
-    env.define_fn('gte', _make_binop('gte', 'than', lambda l, r: compare_fn.fn([l, r]) != 'lt'))
-    env.define_fn('lte', _make_binop('lte', 'than', lambda l, r: compare_fn.fn([l, r]) != 'gt'))
+    env.define_fn('lt', _make_binop('lt', 'than', lambda l, r: compare_fn.fn([l, r], Environment()) == 'lt'))
+    env.define_fn('gt', _make_binop('gt', 'than', lambda l, r: compare_fn.fn([l, r], Environment()) == 'gt'))
+    env.define_fn('gte', _make_binop('gte', 'than', lambda l, r: compare_fn.fn([l, r], Environment()) != 'lt'))
+    env.define_fn('lte', _make_binop('lte', 'than', lambda l, r: compare_fn.fn([l, r], Environment()) != 'gt'))
     env.define_fn('same', _make_binop('same', 'as', lambda l, r: l is r))

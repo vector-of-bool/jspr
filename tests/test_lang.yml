@@ -246,7 +246,7 @@ cases:
       foo: 8
       bar: 9
     code:
-      - [id:seq: [.foo, .bar]]
+      - [id`: [.foo, .bar]]
     expect: [8, 9]
 
   kwlist-6:
@@ -266,7 +266,7 @@ cases:
   kwlist-8:
     what: Array-quotes require seq expressions
     code:
-      - [id:seq: 6]
+      - [id`: 6]
     rescue: [invalid-seq, 6]
 
   kwlist-9:
@@ -280,7 +280,7 @@ cases:
     env:
       foo: [1, 2, 3]
     code:
-      - [id:seq: .foo]
+      - [id`: .foo]
     rescue: [invalid-seq, .foo]
 
   kwlist-11:
@@ -413,7 +413,7 @@ cases:
   lang-9:
     what: seq will create a new scope
     code:
-      - -id:seq: [1, 2, foo=: 8]
+      - -id`: [1, 2, foo=: 8]
       - .foo
     rescue: [env-name-error, foo]
 
@@ -450,3 +450,74 @@ cases:
       - [defun: foo, of: [a, b], is: [add, .a, .b]]
       - [foo, 2, 3]
     expect: 5
+
+  test-fn-1:
+    what: Call a module function
+    code:
+      - [testmod.add: 1, b: 3]
+    expect: 4
+
+  test-fn-1:
+    what: Call a module with positional args
+    code:
+      - [testmod.add, 1, 3]
+    expect: 4
+
+  test-arg-defaults:
+    what: Call a function with optional arguments
+    code:
+      - -assert: [test: foo, eq: [testmod.manip-str: foo]]
+      - -assert: [test: barfoo, eq: [testmod.manip-str: foo, prepend: bar]]
+      - -assert: [test: foobaz, eq: [testmod.manip-str: foo, append: baz]]
+      - -assert: [test: barfoobaz, eq: [testmod.manip-str: foo, prepend: bar, append: baz]]
+      - ok
+    expect: ok
+
+  test-arg-names:
+   what: Call args and bind names unrelated to the enclosing scope names
+   code:
+     - prepend=: [testmod.manip-str: foo, prepend: bar]
+     - .prepend
+   expect: barfoo
+
+  test-no-double-eval:
+    what: Do not double-eval when calling a closure
+    code:
+      - fn=: [lambda: [a], is: .a]
+      - [fn: [seq: [1, 2]]]
+    expect: [1, 2]
+
+  test-reduce:
+    what: Sum some integers
+    code:
+      - nums=`: [1, 2, 3, 4]
+      - [iter.reduce: .nums, from: 0, by: [lambda: [sum, el], is: [add, .sum, .el]]]
+    expect: 10
+
+  test-reduce-1:
+    what: Generate a partial sum
+    code:
+      - partial-sum=:
+        - lambda: [items, from, by]
+        - is:seq.head:
+          - iter.reduce: .items
+          - from`: [[], .from]
+          - by:
+            - lambda: [pair, elem_]
+            - is:do:
+              - arr=:seq.head: .pair
+              - sum=: [seq.elem: .pair, at: 1]
+              - part=: [apply: .by, with`: [.sum, .elem_]]
+              - -seq: [
+                [seq.join`: [.arr, [seq: [.part]]]],
+                .part]
+      - nums=`: [1, 2, 3, 4, 5]
+      - [partial-sum: .nums, from: 0, by: [lambda: [acc, el], is: [add, .acc, .el]]]
+    expect: [1, 3, 6, 10, 15]
+
+  test-map-1:
+    what: Map some data
+    code:
+      - nums=: [iter.iota: 1, to: inf]
+      - [seq.seq: [iter.take: 4, from: [iter.map: .nums, by: [lambda: [a], is: [mul, 2, .a]]]]]
+    expect: [2, 4, 6, 8]

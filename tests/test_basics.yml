@@ -4,7 +4,7 @@ cases:
     what: Check that 'apply' works
     code:
       - func=: .add
-      - args=:seq: [1, [add: 4, and: 9]]
+      - args=`: [1, [add: 4, and: 9]]
       - -assert:
           - eq: [apply: .func, with: .args]
           - and: 14
@@ -188,7 +188,7 @@ cases:
   compare-3:
     what: Compare two sequences
     code:
-      - [compare:seq: [1, 2, 3], with:seq: [1, 3, 2]]
+      - [compare`: [1, 2, 3], with`: [1, 3, 2]]
     expect: lt
 
   compare-4:
@@ -414,7 +414,7 @@ cases:
     what: seq-quote shorthand
     code:
       - [let: foo, be: 33]
-      - [let: bar, be:seq: [bar, .foo]]
+      - [let: bar, be`: [bar, .foo]]
       - .bar
     expect: [bar, 33]
 
@@ -468,7 +468,7 @@ cases:
               - some-var=: 9
               - [add: .some-var, and: .foo]
       - result=: [func, 1]
-      - [or: [eq: .result, and: 10], or: [raise:seq: ["failed", .result]]]
+      - [or: [eq: .result, and: 10], or: [raise`: ["failed", .result]]]
       - .some-var
     rescue: [env-name-error, some-var]
 
@@ -480,7 +480,7 @@ cases:
           - is:do:
               - o=: 9
               - [sub: .o, minus: .a]
-      - [apply: .func, with:seq: [1]]
+      - [apply: .func, with`: [1]]
     expect: 8
 
   or-1:
@@ -557,17 +557,29 @@ cases:
   join-1:
     what: Array joining
     code:
-      - a=:seq: [1, 2, 3, 4]
-      - b=:seq: [3, 1, 7, 1]
-      - c=: [join: .a, with: .b]
+      - a=`: [1, 2, 3, 4]
+      - b=`: [3, 1, 7, 1]
+      - c=: [seq.join`: [.a, .b]]
       - .c
     expect: [1, 2, 3, 4, 3, 1, 7, 1]
 
-  join-2:
-    what: String joining
+  join-strs-1:
+    what: Join some strings
     code:
-      - [join: I am a string, with:seq: [I, am, an, array]]
-    rescue: [invalid-join, I am a string, [I, am, an, array]]
+      - [str.join`: [a, b, c, d]]
+    expect: abcd
+
+  join-strs-with:
+    what: Join some strings with a comma
+    code:
+      - [str.join`: [a, b, c, d], with: ", "]
+    expect: "a, b, c, d"
+
+  to-string:
+    what: Convert something to a string
+    code:
+      - [str.str: 9]
+    expect: "9"
 
   assert-1:
     what: Assertion fails
@@ -614,45 +626,45 @@ cases:
   len-1:
     what: Length of a string
     code:
-      - [len: "Hello"]
+      - [seq.len: "Hello"]
     expect: 5
 
   len-2:
     what: Check length of string, seq, and map
     code:
-      - [assert: [eq: 5, and: [len: "Hello"]]]
-      - [assert: [eq: 2, and: [len': [1, 2]]]]
-      - [assert: [eq: 3, and: [len:map: { a: b, c: d, e: f }]]]
-      - [len': [1, 2, 3]]
+      - [assert: [eq: 5, and: [seq.len: "Hello"]]]
+      - [assert: [eq: 2, and: [seq.len': [1, 2]]]]
+      - [assert: [eq: 3, and: [seq.len:map: { a: b, c: d, e: f }]]]
+      - [seq.len': [1, 2, 3]]
     expect: 3
 
   len-3:
     what: Length of a quoted map
     code:
-      - [len': { a: b, c: d, e: f }]
+      - [seq.len': { a: b, c: d, e: f }]
     expect: 3
 
   len-4:
     what: Length of a bool is an error
     code:
-      - [len: true]
+      - [seq.len: true]
     rescue: [invalid-len, true]
 
   elem-1:
     what: Get a seq element
     code:
       - arr=': [foo, bar, baz]
-      - [assert: [eq: bar, and: [elem: .arr, at: 1]]]
-      - [assert: [eq: baz, and: [elem: .arr, at: 2]]]
-      - [assert: [eq: baz, and: [elem: .arr, at: -1]]]
-      - [assert: [eq: foo, and: [elem: .arr, at: 0]]]
+      - [assert: [eq: bar, and: [seq.elem: .arr, at: 1]]]
+      - [assert: [eq: baz, and: [seq.elem: .arr, at: 2]]]
+      - [assert: [eq: baz, and: [seq.elem: .arr, at: -1]]]
+      - [assert: [eq: foo, and: [seq.elem: .arr, at: 0]]]
     expect: null
 
   elem-2:
     what: Out-of-bounds is an error
     code:
       - arr=': [foo, bar, baz]
-      - [elem: .arr, at: 3]
+      - [seq.elem: .arr, at: 3]
     rescue: ["invalid-elem-index", [foo, bar, baz], 3]
 
   slice-1:
@@ -661,25 +673,25 @@ cases:
       - arr=': [1, 2, 3, 4, 5, 6]
       - -assert:
           - eq': [1, 2, 3]
-          - and: [slice: .arr, to: 3]
+          - and: [seq.slice: .arr, to: 3]
       - -assert:
           - eq': [3, 4, 5, 6]
-          - and: [slice: .arr, from: 2]
+          - and: [seq.slice: .arr, from: 2]
       - -assert:
           - eq': [1, 2, 3]
-          - and: [slice: .arr, to: -3]
+          - and: [seq.slice: .arr, to: -3]
       - -assert:
           - eq': [3, 4, 5, 6]
-          - and: [slice: .arr, from: -4]
+          - and: [seq.slice: .arr, from: -4]
       - -assert:
           - eq': []
-          - and: [slice: .arr, from: -1, to: 5]
+          - and: [seq.slice: .arr, from: -1, to: 5]
     expect: null
 
   slice-2:
     what: Get an invalid slice is an error
     code:
       - arr=': [1, 2, 3]
-      - [slice: .arr, from: 2, to: 1]
+      - [seq.slice: .arr, from: 2, to: 1]
 
     rescue: [invalid-slice-range, [1, 2, 3], 2, 1]

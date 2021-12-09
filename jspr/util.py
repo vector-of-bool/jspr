@@ -2,9 +2,10 @@
 General utilities
 """
 
-from typing import Sequence
+import inspect
+from typing import Callable, Sequence
 
-from .runtime import (Arguments, JSPRException, KeywordSequence, PositionalArgs, Value)
+from .runtime import (Arguments, JSPRException, KeywordSequence, PositionalArgs, Undefined, Value)
 
 
 def not_kwlist(args: Arguments) -> PositionalArgs:
@@ -30,4 +31,19 @@ def unpack_kwlist(fn_name: str, args: Arguments, keys: Sequence[str]) -> Positio
         if len(args) != len(keys) + 1:
             raise TypeError(f'Function "{fn_name}" expects {len(keys)+1} arguments ({len(args)} given)')
         return args
+
     return (args.first_arg, ) + tuple(args.get(k, ignore_first=True) for k in keys)
+
+
+def call_py_with_args(pyfn: Callable[..., Value], args: Arguments) -> Value:
+    if isinstance(args, Sequence):
+        return pyfn(*args)
+
+    sig = inspect.signature(pyfn)
+    pos_args = [args.first_arg]
+    kw_args: dict[str, Value] = {}
+    for pname in sig.parameters.keys():
+        f = args.try_get(pname, ignore_first=True)
+        if f is not Undefined:
+            kw_args[pname] = f
+    return pyfn(*pos_args, **kw_args)

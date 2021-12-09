@@ -8,8 +8,8 @@ from typing import cast
 
 from typing_extensions import TypeGuard
 
-from jspr.runtime import (Applicable, Arguments, Environment, JSPRException, KeywordSequence, Map, Sequence, T, Value,
-                          is_map, is_sequence)
+from jspr.runtime import (Applicable, Arguments, Closure, Environment, JSPRException, KeywordSequence, Map, Sequence, T,
+                          Value, is_map, is_sequence)
 
 VALID_IDENT_RE = re.compile(r'[a-zA-Z_](?:[\w_\d-]*[\w_\d])?')
 UNESCAPED_INTERP_SPLIT = re.compile(r'(.*?[^`](?:``)*)#\{(.*)')
@@ -182,6 +182,9 @@ def normalize_pair(key: str, value: Value) -> tuple[str, Value]:
     if key.endswith("'"):
         key = key[:-1]
         return (key, ['quote', value])
+    if key.endswith("`"):
+        key = key[:-1]
+        return (key, ['seq', value])
     if len(key) and not key[-1].isalnum() and key[-1] not in '=_':
         raise_(['invalid-key-suffix', key, value])
     return (key, value)
@@ -190,6 +193,8 @@ def normalize_pair(key: str, value: Value) -> tuple[str, Value]:
 def do_apply(func: Applicable, args: Arguments, env: Environment) -> Value:
     if not callable(func):
         raise_(['invalid-apply', func, args])
+    if isinstance(func, Closure):
+        args = eval_args(args, env)
     return func(args, env)
 
 
